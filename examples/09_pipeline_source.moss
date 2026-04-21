@@ -1,0 +1,13 @@
+# Source stage of a pipeline: emits a PGAP 'event' message
+# with no input needed. Pipe this into 09_pipeline_sink.moss.
+#
+#   ./moss run examples/09_pipeline_source.moss | ./moss run examples/09_pipeline_sink.moss
+
+fn main
+    output
+        protocol: "pgap/1"
+        type: "event"
+        payload:
+            user: "ada"
+            action: "login"
+            score: 42

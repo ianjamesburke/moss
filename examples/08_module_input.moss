@@ -1,0 +1,12 @@
+# A Moss program can be a module in a pipeline.
+# Whatever JSON comes in on stdin is available as 'input'.
+# Reach into it with dots: input.name, input.user.age, etc.
+#
+# Try it:
+#   echo '{"name":"ada","count":3}' | ./moss run examples/08_module_input.moss
+
+fn main
+    output
+        type: "greeting"
+        message: "hello, {input.name}"
+        doubled: input.count

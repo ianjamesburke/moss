@@ -2,51 +2,67 @@
 
 Every example is a real, runnable Moss program.
 
-## How to run any example
+## Running
 
-From the repo root (`~/Documents/GitHub/moss`):
+From the repo root:
 
 ```sh
 ./moss run examples/01_hello.moss
 ```
 
-Replace the filename with whichever example you want to run. The first run compiles `serde_json` which takes ~10 seconds. Every run after that is near-instant because the Rust workspace stays warm.
+First run compiles `serde_json` (~10 seconds). Every run after that is instant — Moss caches compiled binaries by source hash in `~/.moss/bin/`.
+
+Replace the filename with whichever example you want to run.
 
 ## Other commands
 
 ```sh
 ./moss show-rust examples/01_hello.moss
 ```
-Prints the Rust code Moss generates, without running it. Great for seeing how Moss maps to Rust.
+Print the Rust code Moss generates for an example.
 
 ```sh
 ./moss build examples/01_hello.moss
 ```
-Compiles to a standalone binary in the current directory. You can share that binary with anyone — they don't need Moss installed.
+Produce a standalone binary in the current directory. Shareable — no Moss install needed to run it.
 
 ## Index
 
 | File | What it teaches |
 |------|-----------------|
-| `01_hello.moss` | Your first Moss program. A `main` function and an `emit`. |
-| `02_emit_record.moss` | Building a record (key/value data) and emitting it as JSON. |
+| `01_hello.moss` | First program. `fn main` and `output`. |
+| `02_output_record.moss` | Records as indented key/value blocks. |
 | `03_nested.moss` | Records inside records. |
-| `04_variables.moss` | Top-level variables, reused inside `main`. |
+| `04_variables.moss` | Top-level variables, used inside `main`. |
 | `05_interpolation.moss` | Dropping values into strings with `{name}`. |
 | `06_lists.moss` | Lists of text and numbers. |
-| `07_plexi_poc.moss` | A Plexi app proof of concept — emits a PGAP-shaped message. |
-| `TEACHING.moss` | Every rule of Moss in one heavily commented file. Read this top-to-bottom and you know the language. |
+| `07_plexi_poc.moss` | A Plexi app proof of concept — PGAP-shaped message. |
+| `08_module_input.moss` | Reading JSON from stdin with `input.name` dot access. |
+| `09_pipeline_source.moss` | Source stage of a Unix pipeline. |
+| `09_pipeline_sink.moss` | Sink stage that transforms input from the source. |
+| `TEACHING.moss` | Every rule of Moss in one file. |
 
-## What's not working yet
+## Pipelines
 
-This repo ships the **v0 runnable subset**. These features are in the spec but not yet in the compiler:
+Moss programs compose via Unix pipes. Each program reads JSON from stdin as `input`, and emits JSON via `output`:
 
-- Functions with parameters
-- `return`
+```sh
+./moss run examples/09_pipeline_source.moss | ./moss run examples/09_pipeline_sink.moss
+```
+
+You can also pipe in data directly:
+
+```sh
+echo '{"name":"ada","count":3}' | ./moss run examples/08_module_input.moss
+```
+
+## What's not implemented yet
+
+These are in the spec but not in the compiler:
+
+- Functions with parameters and `return`
 - `if` / `else if` / `else`
-- `for` loops
-- `stop` / `skip`
+- `for` loops, `stop`, `skip`
 - Arithmetic and comparison operators
-- List indexing (`tags[1]`) and `length()`
-
-They're next in the queue.
+- List indexing and `length()`
+- `takes` / `gives` declarations with defaults and test values

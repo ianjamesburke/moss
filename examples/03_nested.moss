@@ -2,7 +2,7 @@
 # Each new level of keys goes in by the same amount.
 
 fn main
-    emit
+    output
         type: "user_created"
         payload:
             name: "ada"

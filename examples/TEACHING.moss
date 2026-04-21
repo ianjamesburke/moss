@@ -70,20 +70,20 @@ full_greeting = "hi, {greeting}! you have {count} items."
 fn main
 
     # --- EMIT ------------------------------------------------
-    # 'emit' sends a value out of your program as the result.
+    # 'output' sends a value out of your program as the result.
 
-    emit "a simple piece of text"
+    output "a simple piece of text"
 
-    emit 42
+    output 42
 
-    emit true
+    output true
 
-    emit a_list_of_things
+    output a_list_of_things
 
-    emit user
+    output user
 
-    # You can also build a new record right after emit:
-    emit
+    # You can also build a new record right after output:
+    output
         type: "example"
         message: full_greeting
         details:

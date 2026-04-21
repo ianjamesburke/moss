@@ -1,6 +1,6 @@
 # A proof-of-concept Plexi app written in Moss.
 #
-# Plexi apps are just processes that emit structured messages
+# Plexi apps are just processes that output structured messages
 # over stdout. The PGAP protocol gives them a common shape:
 #
 #   {
@@ -19,7 +19,7 @@ service_name = "moss-demo"
 service_version = "0.1.0"
 
 fn main
-    emit
+    output
         protocol: protocol
         type: "ready"
         id: null

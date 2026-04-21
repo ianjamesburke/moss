@@ -6,7 +6,7 @@ count = 42
 active = true
 
 fn main
-    emit
+    output
         greeting: "hello, {name}"
         summary: "you have {count} items"
         status: "active is {active}"

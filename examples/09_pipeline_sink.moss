@@ -1,0 +1,13 @@
+# Sink stage of a pipeline: takes a PGAP event and re-emits
+# it as a user-facing alert. Reads input with dot access.
+#
+#   ./moss run examples/09_pipeline_source.moss | ./moss run examples/09_pipeline_sink.moss
+
+fn main
+    output
+        protocol: "pgap/1"
+        type: "alert"
+        payload:
+            heading: "new {input.payload.action} from {input.payload.user}"
+            original_type: input.type
+            score: input.payload.score
