@@ -1,0 +1,12 @@
+# You can drop values into strings with curly braces.
+# Moss turns numbers and booleans into text for you.
+
+name = "ada"
+count = 42
+active = true
+
+fn main
+    emit
+        greeting: "hello, {name}"
+        summary: "you have {count} items"
+        status: "active is {active}"

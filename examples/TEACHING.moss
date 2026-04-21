@@ -1,0 +1,106 @@
+# =============================================================
+# LEARN MOSS IN ONE FILE
+# =============================================================
+#
+# This is the whole language, in order.
+# Read from top to bottom. Every rule is shown with an example.
+# Run it with:    ./moss run examples/TEACHING.moss
+# =============================================================
+
+
+# --- COMMENTS ------------------------------------------------
+# Anything after a '#' on a line is a comment. Moss ignores it.
+# Use comments to explain WHY you're doing something.
+
+
+# --- VARIABLES -----------------------------------------------
+# A variable is a name you give to a value.
+# You just write: name = value
+# No 'let' keyword. No type declarations.
+
+greeting = "hello"
+count = 3
+active = true
+
+# You can reassign a variable by writing it again.
+count = 10
+
+
+# --- VALUE TYPES ---------------------------------------------
+# Moss has a small, fixed set of value types:
+#
+#   text:     written in "double quotes"
+#   numbers:  written without quotes, like 42 or 3.14
+#   boolean:  true or false (no quotes)
+#   null:     the empty value (rarely needed)
+#   list:     [a, b, c] — square brackets, commas between
+#   record:   indented key: value pairs (shown below)
+
+a_piece_of_text = "hello"
+a_whole_number = 42
+a_decimal = 3.14
+a_boolean = true
+a_missing_value = null
+a_list_of_things = ["apple", "banana", "cherry"]
+
+
+# --- RECORDS (KEY/VALUE DATA) --------------------------------
+# Records are groups of named values.
+# Write them as indented key: value lines.
+# No braces. No quotes around keys.
+# Indent each level by the same number of spaces.
+
+user =
+    name: "ada"
+    age: 36
+    is_admin: true
+
+# Records can contain other records. Just indent further.
+company =
+    name: "Moss Labs"
+    founded: 2024
+    address:
+        city: "London"
+        country: "UK"
+
+
+# --- STRING INTERPOLATION ------------------------------------
+# You can drop a value into a string using {name}.
+# Moss converts numbers and booleans to text for you.
+
+full_greeting = "hi, {greeting}! you have {count} items."
+
+
+# --- FUNCTIONS -----------------------------------------------
+# Every Moss program needs ONE function called 'main'.
+# That's where the program starts when you run it.
+# For now, main takes no parameters.
+
+fn main
+    # The body of a function is indented below its name.
+
+    # --- EMIT ------------------------------------------------
+    # 'emit' sends a value out of your program as JSON.
+    # This is the one way Moss programs produce output.
+
+    emit "this is a simple text message"
+
+    # emit a number:
+    emit 42
+
+    # emit a boolean:
+    emit true
+
+    # emit a list you defined above:
+    emit a_list_of_things
+
+    # emit a record you defined above:
+    emit user
+
+    # emit a NEW record inline — indented right after 'emit':
+    emit
+        type: "example"
+        message: full_greeting
+        details:
+            status: "ok"
+            count: count

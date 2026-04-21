@@ -1,0 +1,11 @@
+# Lists are written with square brackets and commas.
+# They can hold text, numbers, or mixed values.
+
+tags = ["fast", "simple", "clear"]
+numbers = [1, 2, 3, 5, 8]
+
+fn main
+    emit
+        type: "catalog"
+        tags: tags
+        numbers: numbers

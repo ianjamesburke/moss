@@ -1,0 +1,10 @@
+# A Moss program's main job is to emit structured data.
+# Records are written as indented key: value pairs.
+# No quoted keys, no curly braces.
+# Values that are text need quotes. Numbers and true/false don't.
+
+fn main
+    emit
+        type: "ready"
+        ok: true
+        count: 3

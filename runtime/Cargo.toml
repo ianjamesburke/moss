@@ -1,0 +1,11 @@
+[package]
+name = "moss_run"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[[bin]]
+name = "moss_run"
+path = "src/main.rs"

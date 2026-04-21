@@ -1,0 +1,12 @@
+# Records can nest. You just keep indenting.
+# Each new level of keys goes in by the same amount.
+
+fn main
+    emit
+        type: "user_created"
+        payload:
+            name: "ada"
+            age: 36
+            skills:
+                primary: "math"
+                secondary: "engineering"

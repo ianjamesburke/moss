@@ -1,0 +1,13 @@
+# Variables are just names you assign values to.
+# Assign once with =. No keyword like "let".
+
+service = "demo"
+version = "1.0"
+port = 8080
+
+fn main
+    emit
+        type: "ready"
+        service: service
+        version: version
+        port: port

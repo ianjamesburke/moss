@@ -1,0 +1,5 @@
+# Every Moss program starts by defining a main function.
+# This is where the program begins when you run it.
+
+fn main
+    emit "hello, world"

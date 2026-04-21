@@ -1,0 +1,30 @@
+# A proof-of-concept Plexi app written in Moss.
+#
+# Plexi apps are just processes that emit structured messages
+# over stdout. The PGAP protocol gives them a common shape:
+#
+#   {
+#     "protocol": "pgap/1",
+#     "type": "<message kind>",
+#     "id": null,
+#     "payload": { ... },
+#     "error": null
+#   }
+#
+# Moss is a natural fit — its whole job is emitting structured JSON.
+# Run this and feed the output into any Plexi-compatible listener.
+
+protocol = "pgap/1"
+service_name = "moss-demo"
+service_version = "0.1.0"
+
+fn main
+    emit
+        protocol: protocol
+        type: "ready"
+        id: null
+        payload:
+            service: service_name
+            version: service_version
+            ready_message: "{service_name} v{service_version} is online"
+        error: null
