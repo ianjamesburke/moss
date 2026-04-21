@@ -192,6 +192,48 @@ if not done
 
 Use parentheses when mixing `and` / `or` — Moss will ask you to, if you don't.
 
+### Loops
+
+Go through every item in a list:
+```moss
+for tag in tags
+    emit tag
+```
+
+Count from one number to another:
+```moss
+for n in 1 to 10
+    emit n
+```
+
+That's both kinds of loop in Moss. No other forms.
+
+**`stop`** exits the loop early. **`skip`** jumps to the next item.
+
+```moss
+for code in codes
+    if code == 0
+        skip
+    if code == 999
+        stop
+    emit code
+```
+
+### Working with lists
+
+Get an item by its position (starting at 1):
+```moss
+first = tags[1]
+second = tags[2]
+```
+
+Count the items in a list:
+```moss
+count = length(tags)
+```
+
+That's it. If you need more, use a `for` loop.
+
 ---
 
 ## The two things Moss does
@@ -432,17 +474,53 @@ fn main
     emit
         type: info
         tags: tags
-        count: 3
+        count: length(tags)
+```
+
+### Looping over a list
+
+```moss
+fn main
+    tags = ["fast", "simple", "clear"]
+    for tag in tags
+        emit
+            type: tag_found
+            name: tag
+```
+
+### Counting with a range
+
+```moss
+fn main
+    for n in 1 to 5
+        emit
+            type: tick
+            number: n
+```
+
+### Skipping and stopping
+
+```moss
+fn main
+    codes = [200, 0, 404, 999, 500]
+    for code in codes
+        if code == 0
+            skip
+        if code == 999
+            stop
+        emit
+            type: code
+            value: code
 ```
 
 ---
 
 ## What you can't do yet (coming later)
 
-- **Loops.** For v1. `retry` is reserved for loop control when it lands.
 - **Multiple files.** For v1. Right now, one file per program.
 - **Reading input.** For v1. Programs only output for now.
 - **Custom error handling.** For v1. Right now, if something breaks, the program stops.
+- **List helpers** like `map`, `filter`, `first`, `last`. For v1. In v0, use a `for` loop.
 
 ---
 
