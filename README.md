@@ -1,64 +1,40 @@
 # Moss
 
-A tiny language for writing Plexi apps.
+A small language that reads like English and compiles to Rust.
 
-Moss programs emit structured JSON messages to stdout using the [PGAP protocol](https://github.com/ianjamesburke/plexi). The entire job of a Moss program is to receive input, build a value, and emit it as a PGAP-compliant message.
+Moss programs receive input, build values, and emit structured JSON to stdout. The source syntax hides JSON entirely — no braces, no quoted keys. You write what you mean; Moss handles the encoding.
 
 ```moss
 fn main
-    emit {
-        "type": "ready",
-        "payload": {
-            "service": "demo"
-        }
-    }
+    emit
+        type: ready
+        payload:
+            service: "demo"
+            ok: true
 ```
 
 stdout:
 ```json
-{"protocol":"pgap/1","type":"ready","id":null,"payload":{"service":"demo"},"error":null}
+{"type":"ready","payload":{"service":"demo","ok":true}}
 ```
 
 ---
 
-## Why
+## Design rules
 
-Plexi apps are just processes that speak PGAP over stdout. Moss makes writing those processes as simple as possible — no boilerplate, no imports, no runtime to configure. You describe what to emit, Moss handles the envelope.
+**One page.** The entire language fits on this page. If it doesn't fit, it's too big.
 
----
+**One day.** You should be able to read this spec and write real programs by end of day.
 
-## File extension
+**One way.** There is exactly one way to write each construct. No alternate syntax, no optional punctuation, no sugar. If two forms exist, one gets removed.
 
-`.moss`
+**Fail first.** The compiler finds the first error, prints it clearly, and stops. No warnings. No continuing past broken code. Fix it and try again.
 
----
-
-## v0 Scope
-
-**Supported:**
-- One-file programs
-- Top-level constants (`let`)
-- One `main` function
-- Strings, numbers, booleans, null
-- Arrays and objects
-- Local variables and simple reassignment
-- Function declarations and calls
-- `emit` — writes a PGAP envelope to stdout
-- `print` — plain debug output
-- `if / else if / else`
-- `return`
-
-**Not in v0:**
-- Classes
-- Async
-- Imports
-- Custom types
-- Loops (v1)
-- Pattern matching (v1)
+**Read like English.** Keywords over symbols. Indentation over braces. Named values over inline noise.
 
 ---
 
-## Language
+## Syntax
 
 ### Comments
 
@@ -68,86 +44,133 @@ Plexi apps are just processes that speak PGAP over stdout. Moss makes writing th
 
 ### Variables
 
-Top-level:
+Top-level constants use `let`:
 ```moss
-let version = "pgap/1"
+let name = "ian"
 let retries = 3
+let debug = false
 ```
 
-Inside functions — first assignment creates a local, reassignment is allowed:
+Inside functions, first assignment creates a local. Reassignment is allowed:
 ```moss
 fn main
-    count = 1
+    count = 0
     count = count + 1
 ```
 
-### Functions
+No `let` inside functions. No shadowing — assigning an existing name updates it.
+
+### Strings
 
 ```moss
-fn main
-    emit {"type": "ready"}
+let greeting = "hello, world"
+let message = "status: " + code
 ```
 
-With params:
+Use `{name}` for interpolation:
 ```moss
-fn make_message(kind, payload)
-    return {
-        "type": kind,
-        "payload": payload
-    }
+let reply = "hello, {name}"
 ```
 
-### Literals
+### Numbers
 
 ```moss
-"hello"
-123
-12.5
-true
-false
-null
+let port = 8080
+let ratio = 0.75
+```
+
+### Booleans
+
+```moss
+let active = true
+let done = false
+```
+
+### Null
+
+```moss
+let error = null
 ```
 
 ### Arrays
 
+Inline for short lists:
 ```moss
-[1, 2, 3]
-["a", "b"]
+let tags = ["fast", "simple", "clear"]
+```
+
+Multi-line for longer:
+```moss
+let steps =
+    - "connect"
+    - "authenticate"
+    - "listen"
 ```
 
 ### Objects
 
-Keys must be strings in v0:
-```moss
-{
-    "type": "ready",
-    "ok": true,
-    "count": 3
-}
-```
-
-### Function calls
+Always written as indented key-value blocks. No braces. No quoted keys.
 
 ```moss
-msg = make_message("ready", {"ok": true})
-emit msg
+let config =
+    host: "localhost"
+    port: 8080
+    debug: true
 ```
 
-### Operators
-
+Nested:
+```moss
+let response =
+    type: ready
+    payload:
+        service: "demo"
+        version: "1.0"
 ```
-+  -  *  /
-== !=
->  >=  <  <=
-and  or  not
+
+If you need to pass an object to a function, assign it first:
+```moss
+fn main
+    data =
+        service: "demo"
+    emit message("ready", data)
 ```
 
-`+` supports `number + number` and `string + string`. No implicit coercion.
+This is intentional — naming things makes code readable.
 
-### Control flow
+### Functions
 
 ```moss
-fn status(code)
+fn greet(name)
+    return "hello, {name}"
+```
+
+No params:
+```moss
+fn timestamp
+    return 0
+```
+
+Functions return `null` if no `return` is reached.
+
+### Return
+
+```moss
+fn answer
+    return 42
+```
+
+Early return is allowed:
+```moss
+fn check(value)
+    if value == null
+        return false
+    return true
+```
+
+### If / else
+
+```moss
+fn label(code)
     if code == 200
         return "ok"
     else if code == 404
@@ -156,234 +179,335 @@ fn status(code)
         return "unknown"
 ```
 
+### Operators
+
+Arithmetic:
+```
++  -  *  /
+```
+
+Comparison:
+```
+==  !=  >  >=  <  <=
+```
+
+Logic (words, not symbols):
+```
+and  or  not
+```
+
+`+` works on numbers and strings. No implicit coercion — adding a number to a string is a compile error.
+
 ---
 
 ## Builtins
 
-### `emit(value)`
+### `emit`
 
-Wraps `value` in a PGAP envelope and writes one JSON line to stdout.
+Encodes a value as JSON and writes one line to stdout.
 
 ```moss
-emit {"type": "ready", "payload": {"name": "demo"}}
+fn main
+    emit
+        type: ready
+        payload:
+            service: "demo"
 ```
 
 stdout:
 ```json
-{"protocol":"pgap/1","type":"ready","id":null,"payload":{"name":"demo"},"error":null}
+{"type":"ready","payload":{"service":"demo"}}
 ```
-
-The PGAP envelope is always:
-```json
-{
-  "protocol": "pgap/1",
-  "type":     "<from value>",
-  "id":       null,
-  "payload":  "<from value, or null>",
-  "error":    null
-}
-```
-
-`emit` reads `type` and `payload` from the object you pass. All other envelope fields are injected automatically.
 
 Rules:
 - Always compact JSON
 - Always appends a newline
-- If the value cannot be encoded, exits with code 1
+- If the value cannot be encoded, the program exits with code 1
 
-### `fail(message)`
+### `fail`
 
-Emits a PGAP error envelope and exits with code 1.
-
-```moss
-fail("bad input")
-```
-
-stdout:
-```json
-{"protocol":"pgap/1","type":"error","id":null,"payload":null,"error":{"message":"bad input"}}
-```
-
-### `print(value)`
-
-Plain string output for debugging. Not protocol-safe.
+Prints an error message to stderr and exits with code 1.
 
 ```moss
-print("hello")
+fail "something went wrong"
 ```
 
-### `json(value)`
+stderr:
+```
+error: something went wrong
+```
 
-Returns the JSON string of a value without emitting.
+### `print`
+
+Prints a plain string to stdout. For debugging only — not protocol-safe.
 
 ```moss
-text = json({"ok": true})
+print "starting up"
+print "count is {count}"
 ```
+
+---
+
+## Compiler behavior
+
+```sh
+moss run app.moss          # compile and run
+moss build app.moss        # compile to binary
+moss build app.moss --rust # emit Rust source
+moss check app.moss        # typecheck only, no output
+```
+
+**Fail first.** On any error, the compiler prints one message and exits immediately. It does not collect multiple errors. Fix the error and run again.
+
+Error format:
+```
+error: unknown function 'greet'
+ --> app.moss:6:5
+  |
+6 |     emit greet("ian")
+  |          ^^^^^
+```
+
+---
+
+## Compile-time errors
+
+| Error | Cause |
+|-------|-------|
+| `unknown function` | Calling a function that doesn't exist |
+| `wrong number of arguments` | Calling a function with the wrong arity |
+| `duplicate function` | Two functions with the same name |
+| `missing main` | No `main` function defined |
+| `type mismatch` | Adding a string to a number, etc. |
+| `invalid indentation` | Mixed tabs/spaces or broken block structure |
+| `undefined variable` | Using a name before assigning it |
 
 ---
 
 ## Example programs
 
-### Ready message
+### Hello world
 
 ```moss
 fn main
-    emit {
-        "type": "ready",
-        "payload": {
-            "service": "demo"
-        }
-    }
+    print "hello, world"
 ```
 
-### Ping / pong
+### Emit a message
 
 ```moss
 fn main
-    emit {
-        "type": "pong",
-        "payload": {
-            "time": 123
-        }
-    }
+    emit
+        type: ready
+        ok: true
+```
+
+### Using a variable
+
+```moss
+let service = "demo"
+
+fn main
+    emit
+        type: ready
+        payload:
+            service: service
+```
+
+### Helper function
+
+```moss
+fn message(kind, data)
+    return
+        type: kind
+        payload: data
+
+fn main
+    data =
+        service: "demo"
+    emit message("ready", data)
 ```
 
 ### Conditional response
 
 ```moss
-fn main
-    ok = true
-
-    if ok
-        emit {"type": "ready"}
+fn respond(code)
+    if code == 200
+        emit
+            type: success
+    else if code == 404
+        emit
+            type: not_found
     else
-        fail("not ready")
+        fail "unexpected status: {code}"
+
+fn main
+    respond(200)
 ```
 
-### Using a helper function
+### Validation
 
 ```moss
-fn message(kind, payload)
-    return {
-        "type": kind,
-        "payload": payload
-    }
+fn is_valid(name)
+    return not name == null and not name == ""
+
+fn greet(name)
+    if not is_valid(name)
+        fail "name is required"
+    return "hello, {name}"
 
 fn main
-    emit message("ready", {"service": "demo"})
+    print greet("ian")
+```
+
+### Building a response from parts
+
+```moss
+let version = "1.0"
+
+fn make_error(msg)
+    return
+        type: error
+        error:
+            message: msg
+            version: version
+
+fn make_success(data)
+    return
+        type: success
+        payload: data
+        error: null
+
+fn main
+    result =
+        service: "demo"
+        ready: true
+    emit make_success(result)
+```
+
+### Array usage
+
+```moss
+fn main
+    tags = ["fast", "simple", "clear"]
+    emit
+        type: info
+        payload:
+            tags: tags
+            count: 3
 ```
 
 ---
 
-## Compiler
+## What Moss compiles to
 
-```sh
-moss build app.moss        # compile to binary
-moss run app.moss          # compile and run
-moss build app.moss --emit rust   # output Rust source
-```
+Moss generates readable Rust. This Moss:
 
-Moss compiles to Rust using `serde_json`. The generated output is readable and minimal.
-
-Example — this Moss:
 ```moss
 fn main
-    emit {"type": "ready"}
+    emit
+        type: ready
+        ok: true
 ```
 
 Generates this Rust:
+
 ```rust
+use serde_json::json;
+
 fn main() {
-    let value = serde_json::json!({
-        "protocol": "pgap/1",
+    let value = json!({
         "type": "ready",
-        "id": serde_json::Value::Null,
-        "payload": serde_json::Value::Null,
-        "error": serde_json::Value::Null,
+        "ok": true
     });
     println!("{}", value);
 }
 ```
 
----
-
-## Errors
-
-Compile-time:
-```
-error: unknown function 'make_msg'
- --> app.moss:4:11
-```
-
-Runtime:
-```
-error: emit failed — value is not an object
- --> app.moss:2:5
-```
+All values map to `serde_json::Value`. No borrow complexity is exposed in the source language. Objects compile to `json!` macros. Strings compile to owned `String`.
 
 ---
 
-## Grammar (minimal sketch)
+## What Moss is not
 
-```
-program      := statement*
-statement    := let_decl | fn_decl | expr_stmt | return_stmt | emit_stmt
-let_decl     := "let" IDENT "=" expr
-fn_decl      := "fn" IDENT params? NEWLINE block
-params       := "(" ident_list? ")"
-block        := INDENT statement+ DEDENT
-return_stmt  := "return" expr?
-emit_stmt    := "emit" expr
-expr         := literal | IDENT | call | object | array | binary | if_expr | assignment
-call         := IDENT "(" arg_list? ")"
-object       := "{" pair_list? "}"
-array        := "[" expr_list? "]"
-binary       := expr op expr
-op           := "+" | "-" | "*" | "/" | "==" | "!=" | ">" | ">=" | "<" | "<=" | "and" | "or"
-```
+- Not a systems language — use Rust directly for that
+- Not a general-purpose language — for v0, one file, one main, stdout output
+- Not a config format — use TOML/YAML for that
+- Not async — everything is synchronous
+- Not object-oriented — no classes, no methods, no inheritance
 
 ---
 
 ## Implementation order
 
-**Phase 1**
+**Phase 1 — core**
 - Tokenizer
-- Indentation-aware parser (indent/dedent)
-- AST nodes
-- Object/array/string/number/bool/null literals
-- `fn main` + `emit`
+- Indentation-aware parser (indent/dedent tokens)
+- AST: literals, objects, arrays, functions, emit
+- `fn main` + `emit` + `print`
+- Rust code generator
 
-**Phase 2**
-- Function declarations and calls
-- Local variables and reassignment
-- `return`
+**Phase 2 — language**
+- Function calls and return
+- Variables and reassignment
 - `if / else if / else`
+- `fail`
+- String interpolation
 
-**Phase 3**
-- `--emit rust` mode
-- `fail` builtin
-- Nicer error messages with source locations
+**Phase 3 — compiler**
+- `moss check` (errors only, no output)
+- `--rust` flag
+- Source-location error messages
+- Duplicate/missing function detection
 
-**Phase 4**
-- Loops
-- PGAP stdlib helpers (correlation IDs, message builders)
-- LSP / syntax highlighting
-
----
-
-## Type model
-
-v0 is dynamically typed at the source level. All values map to `serde_json::Value` in generated Rust. No type annotations in source syntax.
-
-Internal value kinds: `String`, `Number`, `Bool`, `Null`, `Array`, `Object`.
+**Phase 4 — grow**
+- Loops (`for item in list`)
+- Multi-file programs
+- Standard library (string, math, list helpers)
+- LSP / editor support
 
 ---
 
-## Non-goals (v0)
+## Grammar
 
-- No optimizer
-- No type checker
-- No async
-- No imports
-- No classes
-- No WASM target (yet)
+```
+program      := (let_decl | fn_decl)*
+let_decl     := "let" IDENT "=" expr NEWLINE
+fn_decl      := "fn" IDENT params? NEWLINE block
+params       := "(" (IDENT ("," IDENT)*)? ")"
+block        := INDENT stmt+ DEDENT
+stmt         := return_stmt
+             | emit_stmt
+             | fail_stmt
+             | print_stmt
+             | if_stmt
+             | assignment
+             | expr_stmt
+return_stmt  := "return" expr? NEWLINE
+emit_stmt    := "emit" (expr | NEWLINE object_block) NEWLINE
+fail_stmt    := "fail" expr NEWLINE
+print_stmt   := "print" expr NEWLINE
+if_stmt      := "if" expr NEWLINE block ("else if" expr NEWLINE block)* ("else" NEWLINE block)?
+assignment   := IDENT "=" (expr | NEWLINE object_block) NEWLINE
+object_block := INDENT (IDENT ":" (expr | NEWLINE object_block) NEWLINE)+ DEDENT
+array_block  := INDENT ("-" expr NEWLINE)+ DEDENT
+expr         := literal | IDENT | call | binary | unary | interp_string
+call         := IDENT "(" (expr ("," expr)*)? ")"
+binary       := expr op expr
+unary        := "not" expr
+op           := "+" | "-" | "*" | "/" | "==" | "!=" | ">" | ">=" | "<" | "<=" | "and" | "or"
+literal      := STRING | NUMBER | BOOL | "null"
+             | "[" (expr ("," expr)*)? "]"
+             | "[" NEWLINE array_block "]"
+```
+
+---
+
+## Crate
+
+The compiler is published as `moss-lang` on crates.io. The CLI is `moss`.
+
+```sh
+cargo install moss-lang
+moss run hello.moss
+```
