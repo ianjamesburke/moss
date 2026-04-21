@@ -2,39 +2,34 @@
 # LEARN MOSS IN ONE FILE
 # =============================================================
 #
-# This is the whole language, in order.
-# Read from top to bottom. Every rule is shown with an example.
-# Run it with:    ./moss run examples/TEACHING.moss
+# Read top to bottom. Every rule is shown with an example.
+# Run it:   ./moss run examples/TEACHING.moss
 # =============================================================
 
 
 # --- COMMENTS ------------------------------------------------
-# Anything after a '#' on a line is a comment. Moss ignores it.
-# Use comments to explain WHY you're doing something.
+# Anything after a '#' is a comment. Moss ignores it.
 
 
 # --- VARIABLES -----------------------------------------------
-# A variable is a name you give to a value.
-# You just write: name = value
-# No 'let' keyword. No type declarations.
+# Give a name to a value with =
 
 greeting = "hello"
 count = 3
 active = true
 
-# You can reassign a variable by writing it again.
+# Change a value by assigning to it again.
 count = 10
 
 
 # --- VALUE TYPES ---------------------------------------------
-# Moss has a small, fixed set of value types:
 #
-#   text:     written in "double quotes"
-#   numbers:  written without quotes, like 42 or 3.14
-#   boolean:  true or false (no quotes)
-#   null:     the empty value (rarely needed)
-#   list:     [a, b, c] — square brackets, commas between
-#   record:   indented key: value pairs (shown below)
+#   text:     "in double quotes"
+#   number:   42 or 3.14
+#   boolean:  true or false
+#   nothing:  null
+#   list:     [a, b, c]
+#   record:   indented key: value pairs (see below)
 
 a_piece_of_text = "hello"
 a_whole_number = 42
@@ -44,18 +39,16 @@ a_missing_value = null
 a_list_of_things = ["apple", "banana", "cherry"]
 
 
-# --- RECORDS (KEY/VALUE DATA) --------------------------------
-# Records are groups of named values.
-# Write them as indented key: value lines.
-# No braces. No quotes around keys.
-# Indent each level by the same number of spaces.
+# --- RECORDS -------------------------------------------------
+# Groups of named values. Write them as indented key: value lines.
+# Use the same amount of space for each level.
 
 user =
     name: "ada"
     age: 36
     is_admin: true
 
-# Records can contain other records. Just indent further.
+# Records can hold other records. Just indent further.
 company =
     name: "Moss Labs"
     founded: 2024
@@ -64,40 +57,32 @@ company =
         country: "UK"
 
 
-# --- STRING INTERPOLATION ------------------------------------
-# You can drop a value into a string using {name}.
-# Moss converts numbers and booleans to text for you.
+# --- DROPPING VALUES INTO TEXT -------------------------------
+# Put a name in curly braces inside a string.
 
 full_greeting = "hi, {greeting}! you have {count} items."
 
 
-# --- FUNCTIONS -----------------------------------------------
-# Every Moss program needs ONE function called 'main'.
-# That's where the program starts when you run it.
-# For now, main takes no parameters.
+# --- THE MAIN FUNCTION ---------------------------------------
+# Every Moss program has one function called 'main'.
+# That's where it starts.
 
 fn main
-    # The body of a function is indented below its name.
 
     # --- EMIT ------------------------------------------------
-    # 'emit' sends a value out of your program as JSON.
-    # This is the one way Moss programs produce output.
+    # 'emit' sends a value out of your program as the result.
 
-    emit "this is a simple text message"
+    emit "a simple piece of text"
 
-    # emit a number:
     emit 42
 
-    # emit a boolean:
     emit true
 
-    # emit a list you defined above:
     emit a_list_of_things
 
-    # emit a record you defined above:
     emit user
 
-    # emit a NEW record inline — indented right after 'emit':
+    # You can also build a new record right after emit:
     emit
         type: "example"
         message: full_greeting
