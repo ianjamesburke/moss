@@ -2,7 +2,7 @@
 
 A small language that reads like English and compiles to Rust.
 
-Moss programs receive input, build values, and emit structured JSON to stdout. The source syntax hides JSON entirely — no braces, no quoted keys. You write what you mean; Moss handles the encoding.
+Moss is designed so a non-coder can learn it in a day. You write what you mean, and Moss handles the rest — no punctuation puzzles, no jargon, no compiler errors that read like machine code.
 
 ```moss
 fn main
@@ -13,24 +13,24 @@ fn main
             ok: true
 ```
 
-stdout:
+Running this prints one line of JSON:
 ```json
 {"type":"ready","payload":{"service":"demo","ok":true}}
 ```
 
 ---
 
-## Design rules
+## The rules of Moss
 
-**One page.** The entire language fits on this page. If it doesn't fit, it's too big.
+**One page.** The whole language fits on this page.
 
-**One day.** You should be able to read this spec and write real programs by end of day.
+**One day.** You can learn it in an afternoon.
 
-**One way.** There is exactly one way to write each construct. No alternate syntax, no optional punctuation, no sugar. If two forms exist, one gets removed.
+**One way.** There is exactly one way to write each thing. No shortcuts, no alternate forms.
 
-**Fail first.** The compiler finds the first error, prints it clearly, and stops. No warnings. No continuing past broken code. Fix it and try again.
+**Fail first.** If something is wrong, Moss tells you immediately and stops. One error at a time, in plain English.
 
-**Read like English.** Keywords over symbols. Indentation over braces. Named values over inline noise.
+**Never make the writer feel dumb.** Every error is phrased so a 12-year-old can read it once and know what to do.
 
 ---
 
@@ -44,98 +44,82 @@ stdout:
 
 ### Variables
 
-Top-level constants use `let`:
+Just assign a name to a value. No keyword.
+
 ```moss
-let name = "ian"
-let retries = 3
-let debug = false
+name = "ian"
+count = 3
+active = true
 ```
 
-Inside functions, first assignment creates a local. Reassignment is allowed:
+Assigning an existing name updates it:
 ```moss
-fn main
-    count = 0
-    count = count + 1
+count = count + 1
 ```
-
-No `let` inside functions. No shadowing — assigning an existing name updates it.
 
 ### Strings
 
 ```moss
-let greeting = "hello, world"
-let message = "status: " + code
+greeting = "hello, world"
 ```
 
-Use `{name}` for interpolation:
+Put values into strings with `{name}`:
 ```moss
-let reply = "hello, {name}"
+message = "count is {count}"
 ```
+
+You can put anything inside `{}` — numbers, booleans, other variables. Moss converts them for you.
 
 ### Numbers
 
 ```moss
-let port = 8080
-let ratio = 0.75
+port = 8080
+ratio = 0.75
 ```
 
 ### Booleans
 
 ```moss
-let active = true
-let done = false
+active = true
+done = false
 ```
 
-### Null
+### Lists
 
+Short lists on one line:
 ```moss
-let error = null
+tags = ["fast", "simple", "clear"]
 ```
 
-### Arrays
-
-Inline for short lists:
+Long lists as indented items:
 ```moss
-let tags = ["fast", "simple", "clear"]
-```
-
-Multi-line for longer:
-```moss
-let steps =
+steps =
     - "connect"
     - "authenticate"
     - "listen"
 ```
 
-### Objects
+### Records (key/value data)
 
-Always written as indented key-value blocks. No braces. No quoted keys.
+Indented key-value pairs. No braces, no quoted keys.
 
 ```moss
-let config =
+config =
     host: "localhost"
     port: 8080
     debug: true
 ```
 
-Nested:
+Records can nest:
 ```moss
-let response =
+response =
     type: ready
     payload:
         service: "demo"
         version: "1.0"
 ```
 
-If you need to pass an object to a function, assign it first:
-```moss
-fn main
-    data =
-        service: "demo"
-    emit message("ready", data)
-```
-
-This is intentional — naming things makes code readable.
+If you need to pass a record to a function, give it a name first. That makes your code easier to read.
 
 ### Functions
 
@@ -144,30 +128,28 @@ fn greet(name)
     return "hello, {name}"
 ```
 
-No params:
+Functions without parameters skip the parentheses:
 ```moss
-fn timestamp
-    return 0
+fn title
+    return "Moss Program"
 ```
 
-Functions return `null` if no `return` is reached.
-
-### Return
+### Returning values
 
 ```moss
 fn answer
     return 42
 ```
 
-Early return is allowed:
+You can return early:
 ```moss
 fn check(value)
-    if value == null
+    if value == ""
         return false
     return true
 ```
 
-### If / else
+### If, else if, else
 
 ```moss
 fn label(code)
@@ -179,121 +161,185 @@ fn label(code)
         return "unknown"
 ```
 
-### Operators
+### Math
 
-Arithmetic:
 ```
 +  -  *  /
 ```
 
-Comparison:
+`+` also joins strings. If either side is a string, Moss turns the other side into a string automatically:
+```moss
+message = "count: " + count
+# if count is 3, message becomes "count: 3"
+```
+
+### Comparing
+
 ```
 ==  !=  >  >=  <  <=
 ```
 
-Logic (words, not symbols):
-```
-and  or  not
+### Logic
+
+Words, not symbols:
+```moss
+if ready and count > 0
+    emit type: go
+
+if not done
+    emit type: waiting
 ```
 
-`+` works on numbers and strings. No implicit coercion — adding a number to a string is a compile error.
+Use parentheses when mixing `and` / `or` — Moss will ask you to, if you don't.
 
 ---
 
-## Builtins
+## The two things Moss does
 
 ### `emit`
 
-Encodes a value as JSON and writes one line to stdout.
+Sends a value out as JSON.
 
 ```moss
 fn main
     emit
         type: ready
-        payload:
-            service: "demo"
+        ok: true
 ```
 
-stdout:
+Output:
 ```json
-{"type":"ready","payload":{"service":"demo"}}
-```
-
-Rules:
-- Always compact JSON
-- Always appends a newline
-- If the value cannot be encoded, the program exits with code 1
-
-### `fail`
-
-Prints an error message to stderr and exits with code 1.
-
-```moss
-fail "something went wrong"
-```
-
-stderr:
-```
-error: something went wrong
+{"type":"ready","ok":true}
 ```
 
 ### `print`
 
-Prints a plain string to stdout. For debugging only — not protocol-safe.
+Prints plain text. For trying things out.
+
+Wait — that's a second way to output. Moss only has `emit`. Use `emit` with a string if you want to see something:
 
 ```moss
-print "starting up"
-print "count is {count}"
+fn main
+    emit "hello, world"
 ```
+
+Output:
+```json
+"hello, world"
+```
+
+One output, one rule. Simpler.
 
 ---
 
-## Compiler behavior
+## How Moss runs your code
+
+Moss uses Rust underneath, but you don't need to know Rust to use Moss.
+
+Two commands:
 
 ```sh
-moss run app.moss          # compile and run
-moss build app.moss        # compile to binary
-moss build app.moss --rust # emit Rust source
-moss check app.moss        # typecheck only, no output
+moss run hello.moss
 ```
+Runs your program right now. Feels instant. Moss translates your code into Rust in the background, compiles it, and runs it. You never see the Rust.
 
-**Fail first.** On any error, the compiler prints one message and exits immediately. It does not collect multiple errors. Fix the error and run again.
+```sh
+moss build hello.moss
+```
+Creates a real program file you can share with anyone. It runs on its own — they don't need Moss installed.
 
-Error format:
+One-way relationship: Moss is the source, Rust is the output. You write Moss, Moss makes Rust, Rust becomes a program. You never write Rust yourself, and Rust code can't come back into Moss.
+
+If you're curious, you can see the Rust Moss generated:
+```sh
+moss build hello.moss --show-rust
 ```
-error: unknown function 'greet'
- --> app.moss:6:5
-  |
-6 |     emit greet("ian")
-  |          ^^^^^
-```
+This is a great way to start learning Rust later, if you want. But you never need to.
 
 ---
 
-## Compile-time errors
+## Error messages
 
-| Error | Cause |
-|-------|-------|
-| `unknown function` | Calling a function that doesn't exist |
-| `wrong number of arguments` | Calling a function with the wrong arity |
-| `duplicate function` | Two functions with the same name |
-| `missing main` | No `main` function defined |
-| `type mismatch` | Adding a string to a number, etc. |
-| `invalid indentation` | Mixed tabs/spaces or broken block structure |
-| `undefined variable` | Using a name before assigning it |
+Moss errors look like a friend explaining what went wrong. No jargon. No codes. No symbols pointing at characters. Just: the filename, the line of code, and one sentence.
+
+**Mistyped a function name:**
+```
+hello.moss, line 6
+
+    emit greet("ian")
+
+You're calling "greet" but there's no function named "greet" in this file.
+Check the spelling, or add it above.
+```
+
+**Used a variable before creating it:**
+```
+hello.moss, line 4
+
+    message = "count: " + count
+
+Moss doesn't know what "count" is yet.
+Did you forget to create it above?
+```
+
+**Two functions with the same name:**
+```
+hello.moss, line 7
+
+    fn greet(name)
+    fn greet(other)
+
+You have two functions called "greet".
+Rename one, or delete the one you don't need.
+```
+
+**Inconsistent indentation:**
+```
+hello.moss, line 9
+
+        port: 8080
+    debug: true
+
+The indentation changed partway through this block.
+Line 8 uses 8 spaces, but line 9 uses 4 — pick one.
+```
+
+**Ambiguous logic:**
+```
+hello.moss, line 5
+
+    if ready and count > 0 or retry
+
+Moss isn't sure which part to check first.
+Try putting parentheses around the part you mean,
+like: (ready and count > 0) or retry
+```
+
+**No `main` function:**
+```
+hello.moss
+
+Every Moss program needs a function called "main".
+Add one like this:
+
+    fn main
+        emit "hello"
+```
+
+One error at a time. Fix it, run again. Moss never dumps a list of problems at you.
 
 ---
 
 ## Example programs
 
-### Hello world
+### Hello
 
 ```moss
 fn main
-    print "hello, world"
+    emit "hello, world"
 ```
 
-### Emit a message
+### A ready message
 
 ```moss
 fn main
@@ -305,7 +351,7 @@ fn main
 ### Using a variable
 
 ```moss
-let service = "demo"
+service = "demo"
 
 fn main
     emit
@@ -314,7 +360,7 @@ fn main
             service: service
 ```
 
-### Helper function
+### A helper function
 
 ```moss
 fn message(kind, data)
@@ -323,95 +369,130 @@ fn message(kind, data)
         payload: data
 
 fn main
-    data =
+    info =
         service: "demo"
-    emit message("ready", data)
+    emit message("ready", info)
 ```
 
-### Conditional response
+### Making decisions
 
 ```moss
 fn respond(code)
     if code == 200
-        emit
-            type: success
+        emit type: success
     else if code == 404
-        emit
-            type: not_found
+        emit type: not_found
     else
-        fail "unexpected status: {code}"
+        emit
+            type: error
+            message: "unexpected status: {code}"
 
 fn main
     respond(200)
 ```
 
-### Validation
+### Validating input
 
 ```moss
 fn is_valid(name)
-    return not name == null and not name == ""
+    return not name == ""
 
 fn greet(name)
     if not is_valid(name)
-        fail "name is required"
+        return "name is required"
     return "hello, {name}"
 
 fn main
-    print greet("ian")
+    emit greet("ian")
 ```
 
 ### Building a response from parts
 
 ```moss
-let version = "1.0"
+version = "1.0"
 
-fn make_error(msg)
-    return
-        type: error
-        error:
-            message: msg
-            version: version
-
-fn make_success(data)
+fn make_response(data)
     return
         type: success
+        version: version
         payload: data
-        error: null
 
 fn main
-    result =
+    info =
         service: "demo"
         ready: true
-    emit make_success(result)
+    emit make_response(info)
 ```
 
-### Array usage
+### Using lists
 
 ```moss
 fn main
     tags = ["fast", "simple", "clear"]
     emit
         type: info
-        payload:
-            tags: tags
-            count: 3
+        tags: tags
+        count: 3
 ```
 
 ---
 
-## What Moss compiles to
+## What you can't do yet (coming later)
 
-Moss generates readable Rust. This Moss:
+- **Loops.** For v1. `retry` is reserved for loop control when it lands.
+- **Multiple files.** For v1. Right now, one file per program.
+- **Reading input.** For v1. Programs only output for now.
+- **Custom error handling.** For v1. Right now, if something breaks, the program stops.
 
-```moss
-fn main
-    emit
-        type: ready
-        ok: true
+---
+
+## What Moss is not
+
+- Not a systems language
+- Not for building apps with screens
+- Not object-oriented (no classes)
+- Not for math-heavy work
+- Not a shell replacement
+
+Moss is for: writing small programs that take input, make a decision, and emit structured output. Think of it as the language for the middle of a pipeline.
+
+---
+
+## Getting Moss
+
+```sh
+brew install moss
 ```
 
-Generates this Rust:
+Then:
+```sh
+moss run hello.moss
+```
 
+That's it. No Rust installation, no configuration, no project setup.
+
+---
+
+## Under the hood
+
+Moss compiles to readable Rust using `serde_json`. The compiler is written in Rust and published to crates.io as `moss-lang`. The CLI tool is named `moss`.
+
+```sh
+cargo install moss-lang   # if you'd rather install from source
+```
+
+---
+
+## For the curious: how `emit` works
+
+When you write:
+```moss
+emit
+    type: ready
+    ok: true
+```
+
+Moss generates:
 ```rust
 use serde_json::json;
 
@@ -424,90 +505,9 @@ fn main() {
 }
 ```
 
-All values map to `serde_json::Value`. No borrow complexity is exposed in the source language. Objects compile to `json!` macros. Strings compile to owned `String`.
-
----
-
-## What Moss is not
-
-- Not a systems language — use Rust directly for that
-- Not a general-purpose language — for v0, one file, one main, stdout output
-- Not a config format — use TOML/YAML for that
-- Not async — everything is synchronous
-- Not object-oriented — no classes, no methods, no inheritance
-
----
-
-## Implementation order
-
-**Phase 1 — core**
-- Tokenizer
-- Indentation-aware parser (indent/dedent tokens)
-- AST: literals, objects, arrays, functions, emit
-- `fn main` + `emit` + `print`
-- Rust code generator
-
-**Phase 2 — language**
-- Function calls and return
-- Variables and reassignment
-- `if / else if / else`
-- `fail`
-- String interpolation
-
-**Phase 3 — compiler**
-- `moss check` (errors only, no output)
-- `--rust` flag
-- Source-location error messages
-- Duplicate/missing function detection
-
-**Phase 4 — grow**
-- Loops (`for item in list`)
-- Multi-file programs
-- Standard library (string, math, list helpers)
-- LSP / editor support
-
----
-
-## Grammar
-
-```
-program      := (let_decl | fn_decl)*
-let_decl     := "let" IDENT "=" expr NEWLINE
-fn_decl      := "fn" IDENT params? NEWLINE block
-params       := "(" (IDENT ("," IDENT)*)? ")"
-block        := INDENT stmt+ DEDENT
-stmt         := return_stmt
-             | emit_stmt
-             | fail_stmt
-             | print_stmt
-             | if_stmt
-             | assignment
-             | expr_stmt
-return_stmt  := "return" expr? NEWLINE
-emit_stmt    := "emit" (expr | NEWLINE object_block) NEWLINE
-fail_stmt    := "fail" expr NEWLINE
-print_stmt   := "print" expr NEWLINE
-if_stmt      := "if" expr NEWLINE block ("else if" expr NEWLINE block)* ("else" NEWLINE block)?
-assignment   := IDENT "=" (expr | NEWLINE object_block) NEWLINE
-object_block := INDENT (IDENT ":" (expr | NEWLINE object_block) NEWLINE)+ DEDENT
-array_block  := INDENT ("-" expr NEWLINE)+ DEDENT
-expr         := literal | IDENT | call | binary | unary | interp_string
-call         := IDENT "(" (expr ("," expr)*)? ")"
-binary       := expr op expr
-unary        := "not" expr
-op           := "+" | "-" | "*" | "/" | "==" | "!=" | ">" | ">=" | "<" | "<=" | "and" | "or"
-literal      := STRING | NUMBER | BOOL | "null"
-             | "[" (expr ("," expr)*)? "]"
-             | "[" NEWLINE array_block "]"
+Run that Rust and you get:
+```json
+{"type":"ready","ok":true}
 ```
 
----
-
-## Crate
-
-The compiler is published as `moss-lang` on crates.io. The CLI is `moss`.
-
-```sh
-cargo install moss-lang
-moss run hello.moss
-```
+You never see this Rust unless you ask. But it's there — readable, ordinary, and a stepping-stone if you ever want to learn Rust proper.
