@@ -7,7 +7,7 @@ Source (.moss) -> AST -> Rust -> cargo run.
 Supports:
 - fn main (entry point)
 - Variables with assignment (top-level and inside main)
-- emit <value>
+- output <value>
 - Records (indented key: value blocks, no braces)
 - Lists (inline [a, b, c])
 - Strings with {name} interpolation
@@ -238,7 +238,7 @@ class Parser:
 
     def parse_block_stmt(self, block_indent):
         line_no, indent, toks = self.peek()
-        # emit
+        # output
         if toks[0] == ("KEYWORD", "output"):
             self.advance()
             rest = toks[1:]
@@ -506,7 +506,7 @@ def compile_program(ast, filename, source_lines):
             raise RuntimeError(f"unexpected top-level stmt: {stmt['kind']}")
     if main_fn is None:
         raise MossError(1, source_lines,
-            "Every Moss program needs a function called \"main\". Add one like this:\n\n    fn main\n        emit \"hello\"", filename)
+            "Every Moss program needs a function called \"main\". Add one like this:\n\n    fn main\n        output \"hello\"", filename)
 
     # Generate the main function body with top-level assigns first, then main body.
     combined = top_assigns + main_fn["body"]

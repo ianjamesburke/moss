@@ -6,8 +6,8 @@ Moss is designed so a non-coder can learn it in a day. You write what you mean, 
 
 ```moss
 fn main
-    emit
-        type: ready
+    output
+        type: "ready"
         payload:
             service: "demo"
             ok: true
@@ -113,7 +113,7 @@ config =
 Records can nest:
 ```moss
 response =
-    type: ready
+    type: "ready"
     payload:
         service: "demo"
         version: "1.0"
@@ -184,10 +184,10 @@ message = "count: " + count
 Words, not symbols:
 ```moss
 if ready and count > 0
-    emit type: go
+    output type: "go"
 
 if not done
-    emit type: waiting
+    output type: "waiting"
 ```
 
 Use parentheses when mixing `and` / `or` — Moss will ask you to, if you don't.
@@ -197,13 +197,13 @@ Use parentheses when mixing `and` / `or` — Moss will ask you to, if you don't.
 Go through every item in a list:
 ```moss
 for tag in tags
-    emit tag
+    output tag
 ```
 
 Count from one number to another:
 ```moss
 for n in 1 to 10
-    emit n
+    output n
 ```
 
 That's both kinds of loop in Moss. No other forms.
@@ -216,7 +216,7 @@ for code in codes
         skip
     if code == 999
         stop
-    emit code
+    output code
 ```
 
 ### Working with lists
@@ -238,14 +238,14 @@ That's it. If you need more, use a `for` loop.
 
 ## The two things Moss does
 
-### `emit`
+### `output`
 
 Sends a value out as JSON.
 
 ```moss
 fn main
-    emit
-        type: ready
+    output
+        type: "ready"
         ok: true
 ```
 
@@ -258,11 +258,11 @@ Output:
 
 Prints plain text. For trying things out.
 
-Wait — that's a second way to output. Moss only has `emit`. Use `emit` with a string if you want to see something:
+Wait — that's a second way to output. Moss only has `output`. Use `output` with a string if you want to see something:
 
 ```moss
 fn main
-    emit "hello, world"
+    output "hello, world"
 ```
 
 Output:
@@ -271,6 +271,31 @@ Output:
 ```
 
 One output, one rule. Simpler.
+
+### `input`
+
+Reads JSON piped in on stdin. Use dot access to reach into it.
+
+```moss
+fn main
+    output
+        message: "hello, {input.name}"
+        count: input.count
+```
+
+```sh
+echo '{"name":"ada","count":3}' | moss run greet.moss
+```
+
+```json
+{"message":"hello, ada","count":3}
+```
+
+If nothing is piped in, `input` is `null`. Programs can be used standalone or as stages in a pipeline.
+
+```sh
+moss run source.moss | moss run transform.moss | moss run sink.moss
+```
 
 ---
 
@@ -308,7 +333,7 @@ Moss errors look like a friend explaining what went wrong. No jargon. No codes. 
 ```
 hello.moss, line 6
 
-    emit greet("ian")
+    output greet("ian")
 
 You're calling "greet" but there's no function named "greet" in this file.
 Check the spelling, or add it above.
@@ -365,7 +390,7 @@ Every Moss program needs a function called "main".
 Add one like this:
 
     fn main
-        emit "hello"
+        output "hello"
 ```
 
 One error at a time. Fix it, run again. Moss never dumps a list of problems at you.
@@ -378,15 +403,15 @@ One error at a time. Fix it, run again. Moss never dumps a list of problems at y
 
 ```moss
 fn main
-    emit "hello, world"
+    output "hello, world"
 ```
 
 ### A ready message
 
 ```moss
 fn main
-    emit
-        type: ready
+    output
+        type: "ready"
         ok: true
 ```
 
@@ -396,8 +421,8 @@ fn main
 service = "demo"
 
 fn main
-    emit
-        type: ready
+    output
+        type: "ready"
         payload:
             service: service
 ```
@@ -413,7 +438,7 @@ fn message(kind, data)
 fn main
     info =
         service: "demo"
-    emit message("ready", info)
+    output message("ready", info)
 ```
 
 ### Making decisions
@@ -421,12 +446,12 @@ fn main
 ```moss
 fn respond(code)
     if code == 200
-        emit type: success
+        output type: "success"
     else if code == 404
-        emit type: not_found
+        output type: "not_found"
     else
-        emit
-            type: error
+        output
+            type: "error"
             message: "unexpected status: {code}"
 
 fn main
@@ -445,7 +470,7 @@ fn greet(name)
     return "hello, {name}"
 
 fn main
-    emit greet("ian")
+    output greet("ian")
 ```
 
 ### Building a response from parts
@@ -455,7 +480,7 @@ version = "1.0"
 
 fn make_response(data)
     return
-        type: success
+        type: "success"
         version: version
         payload: data
 
@@ -463,7 +488,7 @@ fn main
     info =
         service: "demo"
         ready: true
-    emit make_response(info)
+    output make_response(info)
 ```
 
 ### Using lists
@@ -471,8 +496,8 @@ fn main
 ```moss
 fn main
     tags = ["fast", "simple", "clear"]
-    emit
-        type: info
+    output
+        type: "info"
         tags: tags
         count: length(tags)
 ```
@@ -483,8 +508,8 @@ fn main
 fn main
     tags = ["fast", "simple", "clear"]
     for tag in tags
-        emit
-            type: tag_found
+        output
+            type: "tag_found"
             name: tag
 ```
 
@@ -493,8 +518,8 @@ fn main
 ```moss
 fn main
     for n in 1 to 5
-        emit
-            type: tick
+        output
+            type: "tick"
             number: n
 ```
 
@@ -508,7 +533,7 @@ fn main
             skip
         if code == 999
             stop
-        emit
+        output
             type: code
             value: code
 ```
@@ -518,7 +543,6 @@ fn main
 ## What you can't do yet (coming later)
 
 - **Multiple files.** For v1. Right now, one file per program.
-- **Reading input.** For v1. Programs only output for now.
 - **Custom error handling.** For v1. Right now, if something breaks, the program stops.
 - **List helpers** like `map`, `filter`, `first`, `last`. For v1. In v0, use a `for` loop.
 
@@ -532,7 +556,7 @@ fn main
 - Not for math-heavy work
 - Not a shell replacement
 
-Moss is for: writing small programs that take input, make a decision, and emit structured output. Think of it as the language for the middle of a pipeline.
+Moss is for: writing small programs that take input, make a decision, and produce structured output. Think of it as the language for the middle of a pipeline.
 
 ---
 
@@ -561,12 +585,12 @@ cargo install moss-lang   # if you'd rather install from source
 
 ---
 
-## For the curious: how `emit` works
+## For the curious: how `output` works
 
 When you write:
 ```moss
-emit
-    type: ready
+output
+    type: "ready"
     ok: true
 ```
 
