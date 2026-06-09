@@ -6,8 +6,10 @@ Source (.moss) -> AST -> Rust -> cargo run.
 
 Supports:
 - fn main (entry point)
+- fn name(param1, param2) — functions with parameters
 - Variables with assignment (top-level and inside main)
 - output <value>
+- return expr — return a value from a function
 - Records (indented key: value blocks, no braces)
 - Lists (inline [a, b, c])
 - Strings with {name} interpolation
@@ -18,10 +20,9 @@ Supports:
 - Logic: and, or, not
 - Control flow: if / else if / else
 - Loops: for item in list, for n in 1 to 10, stop (break), skip (continue)
-
-Not yet supported in this v0 runnable subset:
-- Functions with parameters, return
-- Indexing, length()
+- Function calls: name(arg1, arg2)
+- List indexing: list[n] (1-based)
+- length(list) — built-in returning list length
 """
 
 import sys
@@ -197,6 +198,7 @@ class Parser:
         self.filename = filename
         self.pos = 0
         self.loop_depth = 0
+        self.current_fn = None  # name of function being parsed, None = top-level
 
     def peek(self):
         if self.pos >= len(self.lines):
@@ -222,20 +224,42 @@ class Parser:
 
     def parse_top_stmt(self):
         line_no, indent, toks = self.peek()
-        # fn NAME
+        # fn NAME  or  fn NAME(param, ...)
         if toks[0] == ("KEYWORD", "fn"):
             if len(toks) < 2 or toks[1][0] != "IDENT":
                 self.error(line_no, "A function needs a name after 'fn', like: fn main")
             name = toks[1][1]
-            if len(toks) > 2:
-                # parens allowed for no-op if empty; params not supported yet
-                if toks[2:] == [("SYM", "("), ("SYM", ")")]:
-                    pass
+            params = []
+            rest_toks = toks[2:]
+            if rest_toks:
+                if rest_toks[0] != ("SYM", "("):
+                    self.error(line_no, "After a function name, Moss expected '(' for parameters or the body on the next line.")
+                rest_toks = rest_toks[1:]  # skip (
+                if rest_toks and rest_toks[0] == ("SYM", ")"):
+                    rest_toks = rest_toks[1:]  # empty params
                 else:
-                    self.error(line_no, "Functions with parameters aren't supported yet in this version. Use 'fn main' with no parentheses.")
+                    while True:
+                        if not rest_toks or rest_toks[0][0] != "IDENT":
+                            self.error(line_no, "Function parameters must be names, like: fn greet(name, age)")
+                        params.append(rest_toks[0][1])
+                        rest_toks = rest_toks[1:]
+                        if not rest_toks:
+                            self.error(line_no, "Function parameter list is missing its closing ')'.")
+                        if rest_toks[0] == ("SYM", ")"):
+                            rest_toks = rest_toks[1:]
+                            break
+                        if rest_toks[0] == ("SYM", ","):
+                            rest_toks = rest_toks[1:]
+                            continue
+                        self.error(line_no, "In function parameters, Moss expected ',' or ')'. Got something else.")
+                if rest_toks:
+                    self.error(line_no, "Moss found unexpected tokens after the function parameter list.")
+            prev_fn = self.current_fn
+            self.current_fn = name
             self.advance()
             body = self.parse_block(indent)
-            return {"kind": "fn", "name": name, "body": body, "line_no": line_no}
+            self.current_fn = prev_fn
+            return {"kind": "fn", "name": name, "params": params, "body": body, "line_no": line_no}
         # IDENT = value
         if toks[0][0] == "IDENT" and len(toks) >= 2 and toks[1] == ("SYM", "="):
             name = toks[0][1]
@@ -280,6 +304,16 @@ class Parser:
         # for IDENT in EXPR [to EXPR]
         if toks[0] == ("KEYWORD", "for"):
             return self.parse_for_stmt(line_no, indent, toks)
+        # return
+        if toks[0] == ("KEYWORD", "return"):
+            if self.current_fn == "main":
+                self.error(line_no, "'return' cannot be used inside 'main'. Use 'return' only in named functions.")
+            if self.current_fn is None:
+                self.error(line_no, "'return' can only be used inside a function body.")
+            self.advance()
+            rest = toks[1:]
+            value = self.parse_inline_expr(line_no, rest) if rest else {"kind": "null"}
+            return {"kind": "return", "value": value, "line_no": line_no}
         # stop / skip
         if toks[0] == ("KEYWORD", "stop"):
             if self.loop_depth == 0:
@@ -530,7 +564,38 @@ class Parser:
                     return {"kind": "list", "items": items}, rest[1:]
                 self.error(line_no, "Inside a list, Moss expected a comma ',' or a closing bracket ']'.")
         if head[0] == "IDENT":
-            return {"kind": "var", "name": head[1]}, toks[1:]
+            name = head[1]
+            rest = toks[1:]
+            # function call: name(arg1, arg2, ...)
+            if rest and rest[0] == ("SYM", "("):
+                args = []
+                rest = rest[1:]  # skip (
+                if rest and rest[0] == ("SYM", ")"):
+                    rest = rest[1:]  # no args
+                else:
+                    while True:
+                        arg, rest = self._parse_or(rest, line_no)
+                        args.append(arg)
+                        if not rest:
+                            self.error(line_no, "Function call is missing its closing ')'.")
+                        if rest[0] == ("SYM", ")"):
+                            rest = rest[1:]
+                            break
+                        if rest[0] == ("SYM", ","):
+                            rest = rest[1:]
+                            continue
+                        self.error(line_no, "In a function call, Moss expected ',' or ')'. Got something else.")
+                return {"kind": "call", "name": name, "args": args, "line_no": line_no}, rest
+            # variable (possibly dotted), optionally indexed with [n]
+            node = {"kind": "var", "name": name}
+            if rest and rest[0] == ("SYM", "["):
+                rest = rest[1:]  # skip [
+                idx_expr, rest = self._parse_or(rest, line_no)
+                if not rest or rest[0] != ("SYM", "]"):
+                    self.error(line_no, "List indexing is missing its closing ']'.")
+                rest = rest[1:]  # skip ]
+                node = {"kind": "index", "list": node, "idx": idx_expr}
+            return node, rest
         self.error(line_no, "Moss didn't expect this here.")
 
 
@@ -577,7 +642,7 @@ def parse_string_parts(raw):
 RUNTIME_PREAMBLE = r"""
 // Generated by Moss. Do not edit by hand.
 
-#![allow(unused_imports, dead_code, unused_variables, unused_mut)]
+#![allow(unused_imports, dead_code, unused_variables, unused_mut, unreachable_code)]
 
 use serde_json::{json, Value};
 use std::io::{IsTerminal, Read};
@@ -796,6 +861,26 @@ def gen_expr(node):
         if op == "or":
             return f'json!(({left}).as_bool().unwrap_or(false) || ({right}).as_bool().unwrap_or(false))'
         raise RuntimeError(f"unknown binop: {op}")
+    if k == "call":
+        fn_name = node["name"]
+        args = [gen_expr(a) for a in node["args"]]
+        if fn_name == "length":
+            if len(args) != 1:
+                raise RuntimeError("length() takes exactly one argument")
+            return f'json!(({args[0]}).as_array().map_or(0, |a| a.len()) as i64)'
+        arg_refs = ", ".join(f"&({a})" for a in args)
+        return f'moss_fn_{fn_name}({arg_refs})'
+    if k == "index":
+        list_code = gen_expr(node["list"])
+        idx_code = gen_expr(node["idx"])
+        return (
+            "{ let _idx = ("
+            + idx_code
+            + ").as_i64().unwrap_or(0) - 1; "
+            + "if _idx >= 0 { ("
+            + list_code
+            + ").as_array().and_then(|a| a.get(_idx as usize)).cloned().unwrap_or(Value::Null) } else { Value::Null } }"
+        )
     if k == "list":
         parts = [gen_expr(it) for it in node["items"]]
         return f'Value::Array(vec![{", ".join(parts)}])'
@@ -814,50 +899,108 @@ def gen_expr(node):
     raise RuntimeError(f"unknown expr kind: {k}")
 
 
-def gen_block(stmts, indent=1):
+def gen_block(stmts, indent=1, declared=None):
+    """Generate Rust for a block of statements.
+
+    `declared` is the set of variable names already bound in enclosing scopes.
+    Assignments to names already in `declared` emit `name = expr;` (mutation)
+    rather than `let mut name: Value = expr;` (new binding), so that loop bodies
+    can accumulate into variables declared in the surrounding function scope.
+    """
+    if declared is None:
+        declared = set()
     out = []
     pad = "    " * indent
     for s in stmts:
         k = s["kind"]
         if k == "assign":
-            out.append(f'{pad}let {s["name"]}: Value = {gen_expr(s["value"])};')
+            name = s["name"]
+            expr_code = gen_expr(s["value"])
+            if name not in declared:
+                out.append(f'{pad}let mut {name}: Value = {expr_code};')
+                declared.add(name)
+            else:
+                out.append(f'{pad}{name} = {expr_code};')
         elif k == "output":
             out.append(f'{pad}{{ let _moss_v: Value = {gen_expr(s["value"])}; println!("{{}}", _moss_v); }}')
         elif k == "if":
-            out.append(gen_if(s, indent))
+            out.append(gen_if(s, indent, declared))
         elif k == "for_in":
-            out.append(gen_for_in(s, indent))
+            out.append(gen_for_in(s, indent, declared))
         elif k == "for_range":
-            out.append(gen_for_range(s, indent))
+            out.append(gen_for_range(s, indent, declared))
         elif k == "stop":
             out.append(f'{pad}break;')
         elif k == "skip":
             out.append(f'{pad}continue;')
+        elif k == "return":
+            out.append(f'{pad}return {gen_expr(s["value"])};')
         else:
             raise RuntimeError(f"unknown block stmt kind: {k}")
     return "\n".join(out)
 
 
-def gen_if(node, indent=1):
+def gen_if(node, indent=1, declared=None):
+    if declared is None:
+        declared = set()
     pad = "    " * indent
+    snapshot = set(declared)
+
+    # Pass 1: dry-run each branch with an isolated copy to discover new variables.
+    branch_new_sets = []
+    for branch in node["branches"]:
+        branch_declared = set(declared)
+        gen_block(branch["body"], indent + 1, branch_declared)
+        branch_new_sets.append(branch_declared - snapshot)
+
+    has_else = node["else_body"] is not None
+    else_new = set()
+    if has_else:
+        else_declared = set(declared)
+        gen_block(node["else_body"], indent + 1, else_declared)
+        else_new = else_declared - snapshot
+
+    # Collect all newly-introduced names across every branch.
+    all_new = set()
+    for s in branch_new_sets:
+        all_new |= s
+    all_new |= else_new
+
+    # Pre-declare every new variable before the if block so Rust can see it in
+    # subsequent statements.  Both "declared in all paths" and "declared in some
+    # paths" cases need this — the difference is only semantic (the latter may
+    # remain Value::Null when the branch was not taken).
     lines = []
+    for v in sorted(all_new):
+        lines.append(f'{pad}let mut {v}: Value = Value::Null;')
+        declared.add(v)
+
+    # Pass 2: generate actual branch code.  declared now includes the pre-declared
+    # names, so gen_block will emit plain assignment (not let mut) inside branches.
     for i, branch in enumerate(node["branches"]):
         cond_code = gen_expr(branch["cond"])
         kw = "if" if i == 0 else "} else if"
         lines.append(f'{pad}{kw} ({cond_code}).as_bool().unwrap_or(false) {{')
-        lines.append(gen_block(branch["body"], indent + 1))
-    if node["else_body"] is not None:
+        lines.append(gen_block(branch["body"], indent + 1, set(declared)))
+    if has_else:
         lines.append(f'{pad}}} else {{')
-        lines.append(gen_block(node["else_body"], indent + 1))
+        lines.append(gen_block(node["else_body"], indent + 1, set(declared)))
     lines.append(f'{pad}}}')
     return "\n".join(lines)
 
 
-def gen_for_in(node, indent=1):
+def gen_for_in(node, indent=1, declared=None):
+    if declared is None:
+        declared = set()
     pad = "    " * indent
     var = node["var"]
     iter_code = gen_expr(node["iter"])
-    body_code = gen_block(node["body"], indent + 1)
+    # The loop variable is a fresh binding inside the loop block.
+    inner_declared = set(declared)
+    inner_declared.add(var)
+    body_code = gen_block(node["body"], indent + 1, inner_declared)
+    # Do NOT propagate loop-body declarations to the outer scope — variables
+    # introduced inside the loop are not in scope after it.
     lines = [
         f'{pad}for _moss_{var} in ({iter_code}).as_array().cloned().unwrap_or_default() {{',
         f'{pad}    let {var}: Value = _moss_{var};',
@@ -867,12 +1010,17 @@ def gen_for_in(node, indent=1):
     return "\n".join(lines)
 
 
-def gen_for_range(node, indent=1):
+def gen_for_range(node, indent=1, declared=None):
+    if declared is None:
+        declared = set()
     pad = "    " * indent
     var = node["var"]
     start_code = gen_expr(node["start"])
     end_code = gen_expr(node["end"])
-    body_code = gen_block(node["body"], indent + 2)
+    inner_declared = set(declared)
+    inner_declared.add(var)
+    body_code = gen_block(node["body"], indent + 2, inner_declared)
+    # Do NOT propagate loop-body declarations to the outer scope.
     lines = [
         f'{pad}{{',
         f'{pad}    let _start = ({start_code}).as_i64().unwrap_or(0);',
@@ -886,9 +1034,88 @@ def gen_for_range(node, indent=1):
     return "\n".join(lines)
 
 
+def gen_user_fn(fn_node):
+    """Generate a Rust function for a user-defined Moss function."""
+    params_sig = ", ".join(f"{p}: &Value" for p in fn_node["params"])
+    body = fn_node["body"]
+    declared = set(fn_node["params"])
+    body_code = gen_block(body, 1, declared)
+    # Only append the implicit null return when the last statement is not already
+    # a return — avoids the unreachable_code lint for functions that always return.
+    has_explicit_return = bool(body) and body[-1]["kind"] == "return"
+    fallthrough = "" if has_explicit_return else "\n    Value::Null\n"
+    return (
+        f'fn moss_fn_{fn_node["name"]}({params_sig}) -> Value {{\n'
+        + body_code
+        + fallthrough
+        + "}\n"
+    )
+
+
+def _calls_in_expr(node):
+    """Recursively yield all call nodes in an expression tree."""
+    k = node.get("kind")
+    if k == "call":
+        yield node
+        for arg in node["args"]:
+            yield from _calls_in_expr(arg)
+    elif k == "binop":
+        yield from _calls_in_expr(node["left"])
+        yield from _calls_in_expr(node["right"])
+    elif k == "unop":
+        yield from _calls_in_expr(node["operand"])
+    elif k == "index":
+        yield from _calls_in_expr(node["list"])
+        yield from _calls_in_expr(node["idx"])
+    elif k == "list":
+        for item in node["items"]:
+            yield from _calls_in_expr(item)
+    elif k == "record":
+        for _, val in node["pairs"]:
+            yield from _calls_in_expr(val)
+
+
+def _calls_in_stmts(stmts):
+    """Recursively yield all call nodes in a list of statements."""
+    for stmt in stmts:
+        k = stmt.get("kind")
+        if k in ("assign", "output", "return"):
+            yield from _calls_in_expr(stmt["value"])
+        elif k == "if":
+            for branch in stmt["branches"]:
+                yield from _calls_in_stmts(branch["body"])
+            if stmt.get("else_body"):
+                yield from _calls_in_stmts(stmt["else_body"])
+        elif k == "for_in":
+            yield from _calls_in_expr(stmt["iter"])
+            yield from _calls_in_stmts(stmt["body"])
+        elif k == "for_range":
+            yield from _calls_in_expr(stmt["start"])
+            yield from _calls_in_expr(stmt["end"])
+            yield from _calls_in_stmts(stmt["body"])
+
+
+def _validate_calls(all_stmts, known_fns, source_lines, filename):
+    """Walk all stmts and raise MossError on unknown or wrong-arity calls."""
+    for call in _calls_in_stmts(all_stmts):
+        name = call["name"]
+        line_no = call.get("line_no", 1)
+        if name not in known_fns:
+            raise MossError(line_no, source_lines,
+                f'Unknown function "{name}". Did you define it?', filename)
+        expected = known_fns[name]
+        got = len(call["args"])
+        if got != expected:
+            s = "" if expected == 1 else "s"
+            raise MossError(line_no, source_lines,
+                f'Function "{name}" takes {expected} argument{s}, but you passed {got}.',
+                filename)
+
+
 def compile_program(ast, filename, source_lines):
-    # Collect top-level assigns and the main function.
+    # Collect top-level assigns, user-defined functions, and main.
     top_assigns = []
+    user_fns = []
     main_fn = None
     seen_fn = set()
     for stmt in ast["stmts"]:
@@ -901,11 +1128,26 @@ def compile_program(ast, filename, source_lines):
             seen_fn.add(stmt["name"])
             if stmt["name"] == "main":
                 main_fn = stmt
+            else:
+                user_fns.append(stmt)
         else:
             raise RuntimeError(f"unexpected top-level stmt: {stmt['kind']}")
     if main_fn is None:
         raise MossError(1, source_lines,
             "Every Moss program needs a function called \"main\". Add one like this:\n\n    fn main\n        output \"hello\"", filename)
+
+    # Arity / existence validation pass.
+    known_fns = {fn["name"]: len(fn["params"]) for fn in user_fns}
+    known_fns["length"] = 1
+    all_stmts = (
+        top_assigns
+        + main_fn["body"]
+        + [stmt for fn in user_fns for stmt in fn["body"]]
+    )
+    _validate_calls(all_stmts, known_fns, source_lines, filename)
+
+    # Generate user-defined functions (emitted before main so they're in scope).
+    user_fn_code = "".join(gen_user_fn(fn) + "\n" for fn in user_fns)
 
     # Generate the main function body with top-level assigns first, then main body.
     combined = top_assigns + main_fn["body"]
@@ -913,7 +1155,9 @@ def compile_program(ast, filename, source_lines):
 
     rust = (
         RUNTIME_PREAMBLE
-        + "\nfn main() {\n"
+        + "\n"
+        + user_fn_code
+        + "fn main() {\n"
         + "    let input: Value = moss_read_input();\n"
         + body_code
         + "\n}\n"
