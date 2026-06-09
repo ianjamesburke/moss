@@ -13,11 +13,14 @@ Supports:
 - Strings with {name} interpolation
 - Numbers, booleans, null
 - Comments (#)
+- Arithmetic: +, -, *, /
+- Comparisons: ==, !=, >, >=, <, <=
+- Logic: and, or, not
+- Control flow: if / else if / else
 
 Not yet supported in this v0 runnable subset:
 - Functions with parameters, return
-- if / else / for / loops / stop / skip
-- Arithmetic, comparison, logic operators
+- for / loops / stop / skip
 - Indexing, length()
 """
 
@@ -113,8 +116,26 @@ def tokenize_line(content, line_no, source_lines, filename):
             tokens.append(("SYM", c))
             i += 1
         elif c == "=":
-            tokens.append(("SYM", "="))
-            i += 1
+            if i + 1 < len(content) and content[i+1] == "=":
+                tokens.append(("SYM", "=="))
+                i += 2
+            else:
+                tokens.append(("SYM", "="))
+                i += 1
+        elif c == "!":
+            if i + 1 < len(content) and content[i+1] == "=":
+                tokens.append(("SYM", "!="))
+                i += 2
+            else:
+                raise MossError(line_no, source_lines,
+                    "Moss doesn't understand '!' here. Did you mean 'not'?", filename)
+        elif c in "<>":
+            if i + 1 < len(content) and content[i+1] == "=":
+                tokens.append(("SYM", c + "="))
+                i += 2
+            else:
+                tokens.append(("SYM", c))
+                i += 1
         else:
             raise MossError(line_no, source_lines,
                 f"Moss doesn't understand the character '{c}' here.", filename)
@@ -248,11 +269,58 @@ class Parser:
             else:
                 value = self.parse_indented_value(block_indent, line_no)
             return {"kind": "output", "value": value, "line_no": line_no}
+        # if / else if / else
+        if toks[0] == ("KEYWORD", "if"):
+            return self.parse_if_stmt(line_no, indent, toks)
         # name = value
         if toks[0][0] == "IDENT" and len(toks) >= 2 and toks[1] == ("SYM", "="):
             name = toks[0][1]
             return self.parse_assignment(line_no, indent, toks, name)
-        self.error(line_no, "Inside a function, Moss expected either an 'output' or a variable assignment (name = value).")
+        self.error(line_no, "Inside a function, Moss expected either an 'output', 'if', or a variable assignment (name = value).")
+
+    def parse_if_stmt(self, line_no, block_indent, toks):
+        """Parse an if/else if/else chain starting at the current line."""
+        # toks[0] == ("KEYWORD", "if")
+        cond_toks = toks[1:]
+        if not cond_toks:
+            self.error(line_no, "An 'if' needs a condition after it, like: if x > 0")
+        cond = self.parse_inline_expr(line_no, cond_toks)
+        self.advance()  # consume the 'if ...' line
+        body = self.parse_block(block_indent)
+        if not body:
+            self.error(line_no, "The 'if' block is empty — add at least one statement inside it.")
+
+        branches = [{"cond": cond, "body": body}]
+        else_body = None
+
+        while self.peek() is not None:
+            next_line_no, next_indent, next_toks = self.peek()
+            if next_indent != block_indent:
+                break
+            if next_toks[0] != ("KEYWORD", "else"):
+                break
+            # else if <cond>  OR  bare else
+            if len(next_toks) >= 2 and next_toks[1] == ("KEYWORD", "if"):
+                ei_cond_toks = next_toks[2:]
+                if not ei_cond_toks:
+                    self.error(next_line_no, "An 'else if' needs a condition after it.")
+                ei_cond = self.parse_inline_expr(next_line_no, ei_cond_toks)
+                self.advance()  # consume 'else if ...' line
+                ei_body = self.parse_block(block_indent)
+                if not ei_body:
+                    self.error(next_line_no, "The 'else if' block is empty.")
+                branches.append({"cond": ei_cond, "body": ei_body})
+            else:
+                # bare else
+                if len(next_toks) > 1:
+                    self.error(next_line_no, "'else' should be on its own line with no extra tokens.")
+                self.advance()  # consume 'else' line
+                else_body = self.parse_block(block_indent)
+                if not else_body:
+                    self.error(next_line_no, "The 'else' block is empty.")
+                break  # nothing can follow bare else
+
+        return {"kind": "if", "branches": branches, "else_body": else_body, "line_no": line_no}
 
     def parse_assignment(self, line_no, indent, toks, name):
         rest = toks[2:]  # after name and =
@@ -296,13 +364,63 @@ class Parser:
 
     def parse_inline_expr(self, line_no, toks):
         """Parse an inline expression from a list of tokens."""
-        expr, rest = self._parse_expr(toks, line_no)
+        expr, rest = self._parse_or(toks, line_no)
         if rest:
             self.error(line_no, "Moss found extra tokens it didn't expect at the end of this line.")
         return expr
 
-    def _parse_expr(self, toks, line_no):
-        """Lowest precedence: + and -."""
+    # Precedence (lowest to highest):
+    # 1. or
+    # 2. and
+    # 3. not (unary)
+    # 4. comparisons: ==, !=, >, >=, <, <=
+    # 5. + -
+    # 6. * /
+    # 7. atoms
+
+    def _parse_or(self, toks, line_no):
+        """Lowest precedence: or."""
+        left, toks = self._parse_and(toks, line_no)
+        while toks and toks[0] == ("KEYWORD", "or"):
+            right, toks = self._parse_and(toks[1:], line_no)
+            left = {"kind": "binop", "op": "or", "left": left, "right": right}
+        return left, toks
+
+    def _parse_and(self, toks, line_no):
+        """and."""
+        left, toks = self._parse_not(toks, line_no)
+        while toks and toks[0] == ("KEYWORD", "and"):
+            right, toks = self._parse_not(toks[1:], line_no)
+            left = {"kind": "binop", "op": "and", "left": left, "right": right}
+        return left, toks
+
+    def _parse_not(self, toks, line_no):
+        """Unary not."""
+        if toks and toks[0] == ("KEYWORD", "not"):
+            operand, rest = self._parse_not(toks[1:], line_no)
+            return {"kind": "unop", "op": "not", "operand": operand}, rest
+        return self._parse_comparison(toks, line_no)
+
+    _CMP_OPS = {("SYM", "=="): "==", ("SYM", "!="): "!=",
+                ("SYM", ">"): ">",   ("SYM", ">="): ">=",
+                ("SYM", "<"): "<",   ("SYM", "<="): "<="}
+
+    def _parse_comparison(self, toks, line_no):
+        """Non-associative comparisons."""
+        left, toks = self._parse_add(toks, line_no)
+        if toks and toks[0] in self._CMP_OPS:
+            op = self._CMP_OPS[toks[0]]
+            right, toks = self._parse_add(toks[1:], line_no)
+            # check for chained comparison and reject it
+            if toks and toks[0] in self._CMP_OPS:
+                self.error(line_no,
+                    "Chained comparisons like 'a < b < c' aren't supported. "
+                    "Use 'a < b and b < c' instead.")
+            return {"kind": "binop", "op": op, "left": left, "right": right}, toks
+        return left, toks
+
+    def _parse_add(self, toks, line_no):
+        """+ and -."""
         left, toks = self._parse_term(toks, line_no)
         while toks and toks[0] in (("SYM", "+"), ("SYM", "-")):
             op = toks[0][1]
@@ -311,7 +429,7 @@ class Parser:
         return left, toks
 
     def _parse_term(self, toks, line_no):
-        """Higher precedence: * and /."""
+        """* and /."""
         left, toks = self._parse_primary(toks, line_no)
         while toks and toks[0] in (("SYM", "*"), ("SYM", "/")):
             op = toks[0][1]
@@ -334,7 +452,7 @@ class Parser:
         if head[0] == "NULL":
             return {"kind": "null"}, toks[1:]
         if head == ("SYM", "("):
-            expr, rest = self._parse_expr(toks[1:], line_no)
+            expr, rest = self._parse_or(toks[1:], line_no)
             if not rest or rest[0] != ("SYM", ")"):
                 self.error(line_no, "Moss expected a closing parenthesis ')' here.")
             return expr, rest[1:]
@@ -344,7 +462,7 @@ class Parser:
             if rest and rest[0] == ("SYM", "]"):
                 return {"kind": "list", "items": []}, rest[1:]
             while True:
-                item, rest = self._parse_expr(rest, line_no)
+                item, rest = self._parse_or(rest, line_no)
                 items.append(item)
                 if not rest:
                     self.error(line_no, "This list is missing its closing bracket ']'.")
@@ -502,11 +620,61 @@ fn moss_div(a: &Value, b: &Value) -> Value {
         _ => Value::Null,
     }
 }
+
+fn moss_lt(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x < y),
+        // NOTE: string ordering not supported — returns null
+        _ => Value::Null,
+    }
+}
+
+fn moss_gt(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x > y),
+        // NOTE: string ordering not supported — returns null
+        _ => Value::Null,
+    }
+}
+
+fn moss_lte(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x <= y),
+        // NOTE: string ordering not supported — returns null
+        _ => Value::Null,
+    }
+}
+
+fn moss_gte(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x >= y),
+        // NOTE: string ordering not supported — returns null
+        _ => Value::Null,
+    }
+}
+
+fn moss_eq(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x == y),
+        _ => json!(a == b),
+    }
+}
+fn moss_neq(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x != y),
+        _ => json!(a != b),
+    }
+}
 """
 
 
 def escape_rust_string(s):
     return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t")
+
+
+_ARITH_OP_FNS = {"+": "moss_add", "-": "moss_sub", "*": "moss_mul", "/": "moss_div"}
+_CMP_OP_FNS = {"<": "moss_lt", ">": "moss_gt", "<=": "moss_lte", ">=": "moss_gte",
+               "==": "moss_eq", "!=": "moss_neq"}
 
 
 def gen_expr(node):
@@ -553,11 +721,24 @@ def gen_expr(node):
             pointer = "/" + "/".join(rest)
             return f'{root}.pointer("{pointer}").cloned().unwrap_or(Value::Null)'
         return f'{root}.clone()'
+    if k == "unop":
+        if node["op"] == "not":
+            operand = gen_expr(node["operand"])
+            return f'json!(!({operand}).as_bool().unwrap_or(false))'
+        raise RuntimeError(f"unknown unop: {node['op']}")
     if k == "binop":
+        op = node["op"]
         left = gen_expr(node["left"])
         right = gen_expr(node["right"])
-        op_fn = {"+": "moss_add", "-": "moss_sub", "*": "moss_mul", "/": "moss_div"}[node["op"]]
-        return f'{op_fn}(&({left}), &({right}))'
+        if op in _ARITH_OP_FNS:
+            return f'{_ARITH_OP_FNS[op]}(&({left}), &({right}))'
+        if op in _CMP_OP_FNS:
+            return f'{_CMP_OP_FNS[op]}(&({left}), &({right}))'
+        if op == "and":
+            return f'json!(({left}).as_bool().unwrap_or(false) && ({right}).as_bool().unwrap_or(false))'
+        if op == "or":
+            return f'json!(({left}).as_bool().unwrap_or(false) || ({right}).as_bool().unwrap_or(false))'
+        raise RuntimeError(f"unknown binop: {op}")
     if k == "list":
         parts = [gen_expr(it) for it in node["items"]]
         return f'Value::Array(vec![{", ".join(parts)}])'
@@ -576,17 +757,35 @@ def gen_expr(node):
     raise RuntimeError(f"unknown expr kind: {k}")
 
 
-def gen_block(stmts):
+def gen_block(stmts, indent=1):
     out = []
+    pad = "    " * indent
     for s in stmts:
         k = s["kind"]
         if k == "assign":
-            out.append(f'let {s["name"]}: Value = {gen_expr(s["value"])};')
+            out.append(f'{pad}let {s["name"]}: Value = {gen_expr(s["value"])};')
         elif k == "output":
-            out.append(f'{{ let _moss_v: Value = {gen_expr(s["value"])}; println!("{{}}", _moss_v); }}')
+            out.append(f'{pad}{{ let _moss_v: Value = {gen_expr(s["value"])}; println!("{{}}", _moss_v); }}')
+        elif k == "if":
+            out.append(gen_if(s, indent))
         else:
             raise RuntimeError(f"unknown block stmt kind: {k}")
-    return "\n".join("    " + line for line in "\n".join(out).splitlines())
+    return "\n".join(out)
+
+
+def gen_if(node, indent=1):
+    pad = "    " * indent
+    lines = []
+    for i, branch in enumerate(node["branches"]):
+        cond_code = gen_expr(branch["cond"])
+        kw = "if" if i == 0 else "} else if"
+        lines.append(f'{pad}{kw} ({cond_code}).as_bool().unwrap_or(false) {{')
+        lines.append(gen_block(branch["body"], indent + 1))
+    if node["else_body"] is not None:
+        lines.append(f'{pad}}} else {{')
+        lines.append(gen_block(node["else_body"], indent + 1))
+    lines.append(f'{pad}}}')
+    return "\n".join(lines)
 
 
 def compile_program(ast, filename, source_lines):
