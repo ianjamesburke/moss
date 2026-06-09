@@ -1,0 +1,31 @@
+fn main
+    # --- for item in list ---
+    fruits = ["apple", "banana", "cherry"]
+    output "Fruits:"
+    for fruit in fruits
+        output fruit
+
+    # --- for n in range ---
+    output "Counting 1 to 5:"
+    for n in 1 to 5
+        output n
+
+    # --- skip: skip a specific value ---
+    output "Skip 3:"
+    for n in 1 to 5
+        if n == 3
+            skip
+        output n
+
+    # --- stop: exit early ---
+    output "Stop at 4:"
+    for n in 1 to 10
+        if n == 4
+            stop
+        output n
+
+    # --- condition inside a loop: output numbers greater than 3 ---
+    output "Greater than 3:"
+    for n in 1 to 6
+        if n > 3
+            output n
