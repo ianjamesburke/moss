@@ -624,6 +624,7 @@ fn moss_div(a: &Value, b: &Value) -> Value {
 fn moss_lt(a: &Value, b: &Value) -> Value {
     match (a.as_f64(), b.as_f64()) {
         (Some(x), Some(y)) => json!(x < y),
+        // NOTE: string ordering not supported — returns null
         _ => Value::Null,
     }
 }
@@ -631,6 +632,7 @@ fn moss_lt(a: &Value, b: &Value) -> Value {
 fn moss_gt(a: &Value, b: &Value) -> Value {
     match (a.as_f64(), b.as_f64()) {
         (Some(x), Some(y)) => json!(x > y),
+        // NOTE: string ordering not supported — returns null
         _ => Value::Null,
     }
 }
@@ -638,6 +640,7 @@ fn moss_gt(a: &Value, b: &Value) -> Value {
 fn moss_lte(a: &Value, b: &Value) -> Value {
     match (a.as_f64(), b.as_f64()) {
         (Some(x), Some(y)) => json!(x <= y),
+        // NOTE: string ordering not supported — returns null
         _ => Value::Null,
     }
 }
@@ -645,7 +648,21 @@ fn moss_lte(a: &Value, b: &Value) -> Value {
 fn moss_gte(a: &Value, b: &Value) -> Value {
     match (a.as_f64(), b.as_f64()) {
         (Some(x), Some(y)) => json!(x >= y),
+        // NOTE: string ordering not supported — returns null
         _ => Value::Null,
+    }
+}
+
+fn moss_eq(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x == y),
+        _ => json!(a == b),
+    }
+}
+fn moss_neq(a: &Value, b: &Value) -> Value {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => json!(x != y),
+        _ => json!(a != b),
     }
 }
 """
@@ -653,6 +670,11 @@ fn moss_gte(a: &Value, b: &Value) -> Value {
 
 def escape_rust_string(s):
     return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t")
+
+
+_ARITH_OP_FNS = {"+": "moss_add", "-": "moss_sub", "*": "moss_mul", "/": "moss_div"}
+_CMP_OP_FNS = {"<": "moss_lt", ">": "moss_gt", "<=": "moss_lte", ">=": "moss_gte",
+               "==": "moss_eq", "!=": "moss_neq"}
 
 
 def gen_expr(node):
@@ -708,16 +730,10 @@ def gen_expr(node):
         op = node["op"]
         left = gen_expr(node["left"])
         right = gen_expr(node["right"])
-        arith_ops = {"+": "moss_add", "-": "moss_sub", "*": "moss_mul", "/": "moss_div"}
-        cmp_ops = {"<": "moss_lt", ">": "moss_gt", "<=": "moss_lte", ">=": "moss_gte"}
-        if op in arith_ops:
-            return f'{arith_ops[op]}(&({left}), &({right}))'
-        if op in cmp_ops:
-            return f'{cmp_ops[op]}(&({left}), &({right}))'
-        if op == "==":
-            return f'json!(({left}) == ({right}))'
-        if op == "!=":
-            return f'json!(({left}) != ({right}))'
+        if op in _ARITH_OP_FNS:
+            return f'{_ARITH_OP_FNS[op]}(&({left}), &({right}))'
+        if op in _CMP_OP_FNS:
+            return f'{_CMP_OP_FNS[op]}(&({left}), &({right}))'
         if op == "and":
             return f'json!(({left}).as_bool().unwrap_or(false) && ({right}).as_bool().unwrap_or(false))'
         if op == "or":
