@@ -1,0 +1,57 @@
+# 13_functions.moss — functions with params, return, calls, indexing, length()
+
+# A function that greets a person by name.
+fn greet(name)
+    return "Hello, {name}!"
+
+# A function that returns the larger of two numbers (early return).
+fn max(a, b)
+    if a > b
+        return a
+    return b
+
+# A function that doubles a number.
+fn double(n)
+    return n * 2
+
+# A function that calls another function.
+fn greet_loudly(name)
+    result = greet(name)
+    return "{result} (LOUD)"
+
+# A function that sums a list.
+fn sum_list(items)
+    total = 0
+    for x in items
+        total = total + x
+    return total
+
+fn main
+    # Basic function call in output
+    output greet("Alice")
+
+    # Function call expression used inside another expression
+    output greet_loudly("Bob")
+
+    # Early return via if
+    output max(3, 7)
+    output max(10, 4)
+
+    # Function result used in arithmetic
+    output double(5) + 1
+
+    # List indexing (1-based)
+    tags = ["first", "second", "third"]
+    output tags[1]
+    output tags[3]
+
+    # length() built-in
+    output length(tags)
+
+    # Function that calls another, with list
+    numbers = [10, 20, 30, 40]
+    output sum_list(numbers)
+    output length(numbers)
+
+    # length of the result of a call (list returned inline)
+    output double(length(tags))
