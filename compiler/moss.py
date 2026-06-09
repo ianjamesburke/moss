@@ -196,6 +196,7 @@ class Parser:
         self.source_lines = source_lines
         self.filename = filename
         self.pos = 0
+        self.loop_depth = 0
 
     def peek(self):
         if self.pos >= len(self.lines):
@@ -281,11 +282,15 @@ class Parser:
             return self.parse_for_stmt(line_no, indent, toks)
         # stop / skip
         if toks[0] == ("KEYWORD", "stop"):
+            if self.loop_depth == 0:
+                self.error(line_no, "'stop' can only be used inside a loop.")
             if len(toks) > 1:
                 self.error(line_no, "'stop' takes no arguments — it just stops the loop.")
             self.advance()
             return {"kind": "stop", "line_no": line_no}
         if toks[0] == ("KEYWORD", "skip"):
+            if self.loop_depth == 0:
+                self.error(line_no, "'skip' can only be used inside a loop.")
             if len(toks) > 1:
                 self.error(line_no, "'skip' takes no arguments — it skips to the next iteration.")
             self.advance()
@@ -355,7 +360,9 @@ class Parser:
         # We parse the first expr and then check if the remaining tokens start with 'to'.
         start_expr, remaining = self._parse_or(rest, line_no)
         self.advance()  # consume the 'for ...' line
+        self.loop_depth += 1
         body = self.parse_block(block_indent)
+        self.loop_depth -= 1
         if not body:
             self.error(line_no, "The 'for' loop body is empty — add at least one statement inside it.")
         if remaining and remaining[0] == ("KEYWORD", "to"):
@@ -865,7 +872,7 @@ def gen_for_range(node, indent=1):
     var = node["var"]
     start_code = gen_expr(node["start"])
     end_code = gen_expr(node["end"])
-    body_code = gen_block(node["body"], indent + 1)
+    body_code = gen_block(node["body"], indent + 2)
     lines = [
         f'{pad}{{',
         f'{pad}    let _start = ({start_code}).as_i64().unwrap_or(0);',
