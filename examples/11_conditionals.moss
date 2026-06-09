@@ -1,0 +1,54 @@
+# 11_conditionals.moss — comparison operators, logic, and if/else
+
+fn main
+    x = 42
+    y = 10
+
+    # Simple if/else
+    if x > y
+        output "x is greater than y"
+    else
+        output "x is not greater than y"
+
+    # else if chain
+    score = 75
+    if score >= 90
+        output "grade: A"
+    else if score >= 80
+        output "grade: B"
+    else if score >= 70
+        output "grade: C"
+    else
+        output "grade: F"
+
+    # Equality and inequality
+    name = "alice"
+    if name == "alice"
+        output "hello alice"
+    if name != "bob"
+        output "you are not bob"
+
+    # and / or / not
+    a = true
+    b = false
+    if a and not b
+        output "a is true and b is false"
+    if a or b
+        output "at least one is true"
+
+    # Comparisons: < and <=
+    temp = 37
+    if temp < 36
+        output "cold"
+    else if temp <= 37
+        output "normal temperature"
+    else
+        output "fever"
+
+    # Nested logic in condition
+    age = 20
+    has_id = true
+    if age >= 18 and has_id
+        output "entry allowed"
+    else
+        output "entry denied"
