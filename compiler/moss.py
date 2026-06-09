@@ -1167,13 +1167,27 @@ def compile_program(ast, filename, source_lines):
 
 # ----- DRIVER -------------------------------------------------------------
 
-def usage():
-    print("Moss — a small language that reads like English.\n")
-    print("Commands:")
-    print("  moss run FILE.moss        compile and run")
-    print("  moss build FILE.moss      compile to a standalone binary")
-    print("  moss show-rust FILE.moss  print the Rust Moss would generate")
-    sys.exit(1)
+HELP_TEXT = """Moss — a small language that reads like English.
+
+Usage:
+  moss <command> [args]
+
+Commands:
+  run FILE.moss        compile and run
+  build FILE.moss      compile to a standalone binary
+  show-rust FILE.moss  print the Rust Moss would generate
+  update               update a git-installed Moss checkout
+  help                 show this help
+
+Options:
+  -h, --help           show this help
+"""
+
+
+def usage(exit_code=0):
+    stream = sys.stdout if exit_code == 0 else sys.stderr
+    print(HELP_TEXT, file=stream, end="")
+    sys.exit(exit_code)
 
 
 def compile_source(path):
@@ -1259,11 +1273,64 @@ def cmd_build(path):
     print(f"built: {out_path}")
 
 
+def _git_stdout(args):
+    r = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip()
+
+
+def cmd_update():
+    import shutil
+    if shutil.which("git") is None:
+        print("moss update needs git, but git is not installed.", file=sys.stderr)
+        sys.exit(1)
+    if not (REPO_ROOT / ".git").exists():
+        print("This Moss install is not a git checkout, so moss update can't update it.", file=sys.stderr)
+        print("Re-run the installer, or use your package manager.", file=sys.stderr)
+        sys.exit(1)
+
+    before = _git_stdout(["rev-parse", "--short", "HEAD"])
+    r = subprocess.run(["git", "-C", str(REPO_ROOT), "pull", "--ff-only", "--quiet"])
+    if r.returncode != 0:
+        print("\nMoss couldn't update. Fix the git error above, then run moss update again.", file=sys.stderr)
+        sys.exit(r.returncode)
+    after = _git_stdout(["rev-parse", "--short", "HEAD"])
+    if before and after and before != after:
+        print(f"Moss updated: {before} -> {after}")
+    else:
+        print("Moss is already up to date.")
+
+
 def main():
-    if len(sys.argv) < 3:
-        usage()
-    cmd = sys.argv[1]
-    path = sys.argv[2]
+    args = sys.argv[1:]
+    if not args:
+        usage(1)
+
+    cmd = args[0]
+    if cmd in ("-h", "--help", "help"):
+        usage(0)
+    if cmd == "update":
+        if len(args) != 1:
+            print("moss update doesn't take a file or extra arguments.\n", file=sys.stderr)
+            usage(1)
+        cmd_update()
+        return
+    if cmd not in ("run", "build", "show-rust"):
+        print(f"unknown command: {cmd}\n", file=sys.stderr)
+        usage(1)
+    if len(args) != 2:
+        print(f"moss {cmd} needs a .moss file.\n", file=sys.stderr)
+        usage(1)
+
+    path = args[1]
+    if path in ("-h", "--help"):
+        usage(0)
     if not os.path.exists(path):
         print(f"file not found: {path}", file=sys.stderr)
         sys.exit(1)

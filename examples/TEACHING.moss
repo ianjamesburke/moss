@@ -3,7 +3,7 @@
 # =============================================================
 #
 # Read top to bottom. Every rule is shown with an example.
-# Run it:   ./moss run examples/TEACHING.moss
+# Run it:   moss run examples/TEACHING.moss
 # =============================================================
 
 

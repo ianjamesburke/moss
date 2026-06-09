@@ -303,7 +303,7 @@ moss run source.moss | moss run transform.moss | moss run sink.moss
 
 Moss uses Rust underneath, but you don't need to know Rust to use Moss.
 
-Two commands:
+Useful commands:
 
 ```sh
 moss run hello.moss
@@ -319,9 +319,14 @@ One-way relationship: Moss is the source, Rust is the output. You write Moss, Mo
 
 If you're curious, you can see the Rust Moss generated:
 ```sh
-moss build hello.moss --show-rust
+moss show-rust hello.moss
 ```
 This is a great way to start learning Rust later, if you want. But you never need to.
+
+To update a git-installed copy:
+```sh
+moss update
+```
 
 ---
 
@@ -563,7 +568,7 @@ Moss is for: writing small programs that take input, make a decision, and produc
 ## Getting Moss
 
 ```sh
-brew install moss
+curl -fsSL https://raw.githubusercontent.com/ianjamesburke/moss/main/install.sh | bash
 ```
 
 Then:
@@ -571,17 +576,15 @@ Then:
 moss run hello.moss
 ```
 
-That's it. No Rust installation, no configuration, no project setup.
+The installer clones Moss to `~/.moss/src` and links `moss` into `~/.local/bin`.
+It checks for Python 3 and Rust before installing.
+Homebrew packaging is not wired up in this repo yet.
 
 ---
 
 ## Under the hood
 
-Moss compiles to readable Rust using `serde_json`. The compiler is written in Rust and published to crates.io as `moss-lang`. The CLI tool is named `moss`.
-
-```sh
-cargo install moss-lang   # if you'd rather install from source
-```
+Moss compiles to readable Rust using `serde_json`. The compiler is the Python script at `compiler/moss.py`; generated programs build against the Rust runtime template under `runtime/`.
 
 ---
 
