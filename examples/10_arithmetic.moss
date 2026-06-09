@@ -7,9 +7,9 @@ fn main
 
     # multiplication and division
     c = 6 * 7
-    d = 22 / 4
-    output c
-    output d
+    d = 22 / 4    # 5.5 (division always returns a float)
+    output c      # expect 42
+    output d      # expect 5.5
 
     # operator precedence: * before +  (expect 14, not 20)
     e = 2 + 3 * 4

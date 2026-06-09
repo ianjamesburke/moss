@@ -437,7 +437,13 @@ fn moss_add(a: &Value, b: &Value) -> Value {
             if n1.is_f64() || n2.is_f64() {
                 json!(n1.as_f64().unwrap() + n2.as_f64().unwrap())
             } else {
-                json!(n1.as_i64().unwrap() + n2.as_i64().unwrap())
+                match n1.as_i64().zip(n2.as_i64()) {
+                    Some((a, b)) => match a.checked_add(b) {
+                        Some(r) => json!(r),
+                        None => json!(n1.as_f64().unwrap() + n2.as_f64().unwrap()),
+                    },
+                    None => json!(n1.as_f64().unwrap() + n2.as_f64().unwrap()),
+                }
             }
         }
         _ => Value::String(format!("{}{}", moss_str(a), moss_str(b))),
@@ -450,7 +456,13 @@ fn moss_sub(a: &Value, b: &Value) -> Value {
             if n1.is_f64() || n2.is_f64() {
                 json!(n1.as_f64().unwrap() - n2.as_f64().unwrap())
             } else {
-                json!(n1.as_i64().unwrap() - n2.as_i64().unwrap())
+                match n1.as_i64().zip(n2.as_i64()) {
+                    Some((a, b)) => match a.checked_sub(b) {
+                        Some(r) => json!(r),
+                        None => json!(n1.as_f64().unwrap() - n2.as_f64().unwrap()),
+                    },
+                    None => json!(n1.as_f64().unwrap() - n2.as_f64().unwrap()),
+                }
             }
         }
         _ => Value::Null,
@@ -463,7 +475,13 @@ fn moss_mul(a: &Value, b: &Value) -> Value {
             if n1.is_f64() || n2.is_f64() {
                 json!(n1.as_f64().unwrap() * n2.as_f64().unwrap())
             } else {
-                json!(n1.as_i64().unwrap() * n2.as_i64().unwrap())
+                match n1.as_i64().zip(n2.as_i64()) {
+                    Some((a, b)) => match a.checked_mul(b) {
+                        Some(r) => json!(r),
+                        None => json!(n1.as_f64().unwrap() * n2.as_f64().unwrap()),
+                    },
+                    None => json!(n1.as_f64().unwrap() * n2.as_f64().unwrap()),
+                }
             }
         }
         _ => Value::Null,
@@ -471,9 +489,15 @@ fn moss_mul(a: &Value, b: &Value) -> Value {
 }
 
 fn moss_div(a: &Value, b: &Value) -> Value {
+    // Division always produces a float in Moss.
     match (a, b) {
         (Value::Number(n1), Value::Number(n2)) => {
-            json!(n1.as_f64().unwrap() / n2.as_f64().unwrap())
+            let denom = n2.as_f64().unwrap();
+            if denom == 0.0 {
+                Value::Null
+            } else {
+                json!(n1.as_f64().unwrap() / denom)
+            }
         }
         _ => Value::Null,
     }
