@@ -162,6 +162,7 @@ def read_logical_lines(source, filename):
 # {"kind": "bool", "value": bool}
 # {"kind": "null"}
 # {"kind": "var", "name": str}
+# {"kind": "binop", "op": str, "left": expr, "right": expr}
 
 
 class Parser:
@@ -295,12 +296,31 @@ class Parser:
 
     def parse_inline_expr(self, line_no, toks):
         """Parse an inline expression from a list of tokens."""
-        expr, rest = self._inline(toks, line_no)
+        expr, rest = self._parse_expr(toks, line_no)
         if rest:
-            self.error(line_no, f"Moss found extra tokens it didn't expect at the end of this line.")
+            self.error(line_no, "Moss found extra tokens it didn't expect at the end of this line.")
         return expr
 
-    def _inline(self, toks, line_no):
+    def _parse_expr(self, toks, line_no):
+        """Lowest precedence: + and -."""
+        left, toks = self._parse_term(toks, line_no)
+        while toks and toks[0] in (("SYM", "+"), ("SYM", "-")):
+            op = toks[0][1]
+            right, toks = self._parse_term(toks[1:], line_no)
+            left = {"kind": "binop", "op": op, "left": left, "right": right}
+        return left, toks
+
+    def _parse_term(self, toks, line_no):
+        """Higher precedence: * and /."""
+        left, toks = self._parse_primary(toks, line_no)
+        while toks and toks[0] in (("SYM", "*"), ("SYM", "/")):
+            op = toks[0][1]
+            right, toks = self._parse_primary(toks[1:], line_no)
+            left = {"kind": "binop", "op": op, "left": left, "right": right}
+        return left, toks
+
+    def _parse_primary(self, toks, line_no):
+        """Atoms: literals, variables, lists, parenthesised expressions."""
         if not toks:
             self.error(line_no, "Moss expected a value here.")
         head = toks[0]
@@ -313,13 +333,18 @@ class Parser:
             return {"kind": "bool", "value": head[1] == "true"}, toks[1:]
         if head[0] == "NULL":
             return {"kind": "null"}, toks[1:]
+        if head == ("SYM", "("):
+            expr, rest = self._parse_expr(toks[1:], line_no)
+            if not rest or rest[0] != ("SYM", ")"):
+                self.error(line_no, "Moss expected a closing parenthesis ')' here.")
+            return expr, rest[1:]
         if head == ("SYM", "["):
             items = []
             rest = toks[1:]
             if rest and rest[0] == ("SYM", "]"):
                 return {"kind": "list", "items": []}, rest[1:]
             while True:
-                item, rest = self._inline(rest, line_no)
+                item, rest = self._parse_expr(rest, line_no)
                 items.append(item)
                 if not rest:
                     self.error(line_no, "This list is missing its closing bracket ']'.")
@@ -331,7 +356,7 @@ class Parser:
                 self.error(line_no, "Inside a list, Moss expected a comma ',' or a closing bracket ']'.")
         if head[0] == "IDENT":
             return {"kind": "var", "name": head[1]}, toks[1:]
-        self.error(line_no, f"Moss didn't expect this here.")
+        self.error(line_no, "Moss didn't expect this here.")
 
 
 def parse_string_parts(raw):
@@ -405,6 +430,78 @@ fn moss_read_input() -> Value {
     }
     serde_json::from_str(&buf).unwrap_or(Value::Null)
 }
+
+fn moss_add(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Number(n1), Value::Number(n2)) => {
+            if n1.is_f64() || n2.is_f64() {
+                json!(n1.as_f64().unwrap() + n2.as_f64().unwrap())
+            } else {
+                match n1.as_i64().zip(n2.as_i64()) {
+                    Some((a, b)) => match a.checked_add(b) {
+                        Some(r) => json!(r),
+                        None => json!(n1.as_f64().unwrap() + n2.as_f64().unwrap()),
+                    },
+                    None => json!(n1.as_f64().unwrap() + n2.as_f64().unwrap()),
+                }
+            }
+        }
+        _ => Value::String(format!("{}{}", moss_str(a), moss_str(b))),
+    }
+}
+
+fn moss_sub(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Number(n1), Value::Number(n2)) => {
+            if n1.is_f64() || n2.is_f64() {
+                json!(n1.as_f64().unwrap() - n2.as_f64().unwrap())
+            } else {
+                match n1.as_i64().zip(n2.as_i64()) {
+                    Some((a, b)) => match a.checked_sub(b) {
+                        Some(r) => json!(r),
+                        None => json!(n1.as_f64().unwrap() - n2.as_f64().unwrap()),
+                    },
+                    None => json!(n1.as_f64().unwrap() - n2.as_f64().unwrap()),
+                }
+            }
+        }
+        _ => Value::Null,
+    }
+}
+
+fn moss_mul(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Number(n1), Value::Number(n2)) => {
+            if n1.is_f64() || n2.is_f64() {
+                json!(n1.as_f64().unwrap() * n2.as_f64().unwrap())
+            } else {
+                match n1.as_i64().zip(n2.as_i64()) {
+                    Some((a, b)) => match a.checked_mul(b) {
+                        Some(r) => json!(r),
+                        None => json!(n1.as_f64().unwrap() * n2.as_f64().unwrap()),
+                    },
+                    None => json!(n1.as_f64().unwrap() * n2.as_f64().unwrap()),
+                }
+            }
+        }
+        _ => Value::Null,
+    }
+}
+
+fn moss_div(a: &Value, b: &Value) -> Value {
+    // Division always produces a float in Moss.
+    match (a, b) {
+        (Value::Number(n1), Value::Number(n2)) => {
+            let denom = n2.as_f64().unwrap();
+            if denom == 0.0 {
+                Value::Null
+            } else {
+                json!(n1.as_f64().unwrap() / denom)
+            }
+        }
+        _ => Value::Null,
+    }
+}
 """
 
 
@@ -456,9 +553,14 @@ def gen_expr(node):
             pointer = "/" + "/".join(rest)
             return f'{root}.pointer("{pointer}").cloned().unwrap_or(Value::Null)'
         return f'{root}.clone()'
+    if k == "binop":
+        left = gen_expr(node["left"])
+        right = gen_expr(node["right"])
+        op_fn = {"+": "moss_add", "-": "moss_sub", "*": "moss_mul", "/": "moss_div"}[node["op"]]
+        return f'{op_fn}(&({left}), &({right}))'
     if k == "list":
         parts = [gen_expr(it) for it in node["items"]]
-        return f'json!([{", ".join(parts)}])' if False else f'Value::Array(vec![{", ".join(parts)}])'
+        return f'Value::Array(vec![{", ".join(parts)}])'
     if k == "record":
         lines = []
         for key, val in node["pairs"]:
