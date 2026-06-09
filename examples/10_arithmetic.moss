@@ -1,0 +1,35 @@
+fn main
+    # integer addition and subtraction
+    a = 10 + 3
+    b = 10 - 3
+    output a
+    output b
+
+    # multiplication and division
+    c = 6 * 7
+    d = 22 / 4
+    output c
+    output d
+
+    # operator precedence: * before +  (expect 14, not 20)
+    e = 2 + 3 * 4
+    output e
+
+    # parentheses override precedence  (expect 20)
+    f = (2 + 3) * 4
+    output f
+
+    # string concatenation with +
+    greeting = "Hello, " + "world!"
+    output greeting
+
+    # variable reassignment with arithmetic
+    count = 1
+    count = count + 1
+    count = count + 1
+    output count
+
+    # mixed: formula in interpolated string
+    side = 7
+    area = side * side
+    output "square area: {area}"
