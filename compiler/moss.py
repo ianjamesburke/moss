@@ -17,10 +17,10 @@ Supports:
 - Comparisons: ==, !=, >, >=, <, <=
 - Logic: and, or, not
 - Control flow: if / else if / else
+- Loops: for item in list, for n in 1 to 10, stop (break), skip (continue)
 
 Not yet supported in this v0 runnable subset:
 - Functions with parameters, return
-- for / loops / stop / skip
 - Indexing, length()
 """
 
@@ -184,6 +184,10 @@ def read_logical_lines(source, filename):
 # {"kind": "null"}
 # {"kind": "var", "name": str}
 # {"kind": "binop", "op": str, "left": expr, "right": expr}
+# {"kind": "for_in", "var": str, "iter": expr, "body": [stmts], "line_no": N}
+# {"kind": "for_range", "var": str, "start": expr, "end": expr, "body": [stmts], "line_no": N}
+# {"kind": "stop"}
+# {"kind": "skip"}
 
 
 class Parser:
@@ -192,6 +196,7 @@ class Parser:
         self.source_lines = source_lines
         self.filename = filename
         self.pos = 0
+        self.loop_depth = 0
 
     def peek(self):
         if self.pos >= len(self.lines):
@@ -272,11 +277,29 @@ class Parser:
         # if / else if / else
         if toks[0] == ("KEYWORD", "if"):
             return self.parse_if_stmt(line_no, indent, toks)
+        # for IDENT in EXPR [to EXPR]
+        if toks[0] == ("KEYWORD", "for"):
+            return self.parse_for_stmt(line_no, indent, toks)
+        # stop / skip
+        if toks[0] == ("KEYWORD", "stop"):
+            if self.loop_depth == 0:
+                self.error(line_no, "'stop' can only be used inside a loop.")
+            if len(toks) > 1:
+                self.error(line_no, "'stop' takes no arguments — it just stops the loop.")
+            self.advance()
+            return {"kind": "stop", "line_no": line_no}
+        if toks[0] == ("KEYWORD", "skip"):
+            if self.loop_depth == 0:
+                self.error(line_no, "'skip' can only be used inside a loop.")
+            if len(toks) > 1:
+                self.error(line_no, "'skip' takes no arguments — it skips to the next iteration.")
+            self.advance()
+            return {"kind": "skip", "line_no": line_no}
         # name = value
         if toks[0][0] == "IDENT" and len(toks) >= 2 and toks[1] == ("SYM", "="):
             name = toks[0][1]
             return self.parse_assignment(line_no, indent, toks, name)
-        self.error(line_no, "Inside a function, Moss expected either an 'output', 'if', or a variable assignment (name = value).")
+        self.error(line_no, "Inside a function, Moss expected either an 'output', 'if', 'for', 'stop', 'skip', or a variable assignment (name = value).")
 
     def parse_if_stmt(self, line_no, block_indent, toks):
         """Parse an if/else if/else chain starting at the current line."""
@@ -321,6 +344,40 @@ class Parser:
                 break  # nothing can follow bare else
 
         return {"kind": "if", "branches": branches, "else_body": else_body, "line_no": line_no}
+
+    def parse_for_stmt(self, line_no, block_indent, toks):
+        """Parse 'for IDENT in EXPR' or 'for IDENT in EXPR to EXPR'."""
+        # toks[0] == ("KEYWORD", "for")
+        if len(toks) < 2 or toks[1][0] != "IDENT":
+            self.error(line_no, "A 'for' loop needs a variable name, like: for item in my_list")
+        if len(toks) < 3 or toks[2] != ("KEYWORD", "in"):
+            self.error(line_no, "A 'for' loop needs 'in' after the variable, like: for item in my_list")
+        var = toks[1][1]
+        rest = toks[3:]
+        if not rest:
+            self.error(line_no, "A 'for' loop needs something to iterate over after 'in'.")
+        # Try to split on 'to' keyword at the top level (not inside parens/brackets).
+        # We parse the first expr and then check if the remaining tokens start with 'to'.
+        start_expr, remaining = self._parse_or(rest, line_no)
+        self.advance()  # consume the 'for ...' line
+        self.loop_depth += 1
+        body = self.parse_block(block_indent)
+        self.loop_depth -= 1
+        if not body:
+            self.error(line_no, "The 'for' loop body is empty — add at least one statement inside it.")
+        if remaining and remaining[0] == ("KEYWORD", "to"):
+            # range loop: for n in START to END
+            end_toks = remaining[1:]
+            if not end_toks:
+                self.error(line_no, "A range loop needs an end value after 'to', like: for n in 1 to 10")
+            end_expr, leftover = self._parse_or(end_toks, line_no)
+            if leftover:
+                self.error(line_no, "Moss found extra tokens after the range end value.")
+            return {"kind": "for_range", "var": var, "start": start_expr, "end": end_expr,
+                    "body": body, "line_no": line_no}
+        if remaining:
+            self.error(line_no, "Moss found extra tokens after the iterable expression.")
+        return {"kind": "for_in", "var": var, "iter": start_expr, "body": body, "line_no": line_no}
 
     def parse_assignment(self, line_no, indent, toks, name):
         rest = toks[2:]  # after name and =
@@ -768,6 +825,14 @@ def gen_block(stmts, indent=1):
             out.append(f'{pad}{{ let _moss_v: Value = {gen_expr(s["value"])}; println!("{{}}", _moss_v); }}')
         elif k == "if":
             out.append(gen_if(s, indent))
+        elif k == "for_in":
+            out.append(gen_for_in(s, indent))
+        elif k == "for_range":
+            out.append(gen_for_range(s, indent))
+        elif k == "stop":
+            out.append(f'{pad}break;')
+        elif k == "skip":
+            out.append(f'{pad}continue;')
         else:
             raise RuntimeError(f"unknown block stmt kind: {k}")
     return "\n".join(out)
@@ -785,6 +850,39 @@ def gen_if(node, indent=1):
         lines.append(f'{pad}}} else {{')
         lines.append(gen_block(node["else_body"], indent + 1))
     lines.append(f'{pad}}}')
+    return "\n".join(lines)
+
+
+def gen_for_in(node, indent=1):
+    pad = "    " * indent
+    var = node["var"]
+    iter_code = gen_expr(node["iter"])
+    body_code = gen_block(node["body"], indent + 1)
+    lines = [
+        f'{pad}for _moss_{var} in ({iter_code}).as_array().cloned().unwrap_or_default() {{',
+        f'{pad}    let {var}: Value = _moss_{var};',
+        body_code,
+        f'{pad}}}',
+    ]
+    return "\n".join(lines)
+
+
+def gen_for_range(node, indent=1):
+    pad = "    " * indent
+    var = node["var"]
+    start_code = gen_expr(node["start"])
+    end_code = gen_expr(node["end"])
+    body_code = gen_block(node["body"], indent + 2)
+    lines = [
+        f'{pad}{{',
+        f'{pad}    let _start = ({start_code}).as_i64().unwrap_or(0);',
+        f'{pad}    let _end = ({end_code}).as_i64().unwrap_or(0);',
+        f'{pad}    for _moss_{var} in _start..=_end {{',
+        f'{pad}        let {var}: Value = json!(_moss_{var});',
+        body_code,
+        f'{pad}    }}',
+        f'{pad}}}',
+    ]
     return "\n".join(lines)
 
 
