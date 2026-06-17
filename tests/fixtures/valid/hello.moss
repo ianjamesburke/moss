@@ -1,0 +1,2 @@
+fn main
+    output "hello, world"

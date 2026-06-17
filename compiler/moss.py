@@ -1112,6 +1112,106 @@ def _validate_calls(all_stmts, known_fns, source_lines, filename):
                 filename)
 
 
+def _root_name(name):
+    return name.split(".", 1)[0]
+
+
+def _var_refs_in_expr(node, fallback_line_no):
+    """Yield (name, line_no) for variable references inside an expression."""
+    k = node.get("kind")
+    if k == "var":
+        yield _root_name(node["name"]), fallback_line_no
+    elif k == "string":
+        for part_kind, val in node["parts"]:
+            if part_kind == "var":
+                yield _root_name(val), fallback_line_no
+    elif k == "binop":
+        yield from _var_refs_in_expr(node["left"], fallback_line_no)
+        yield from _var_refs_in_expr(node["right"], fallback_line_no)
+    elif k == "unop":
+        yield from _var_refs_in_expr(node["operand"], fallback_line_no)
+    elif k == "call":
+        line_no = node.get("line_no", fallback_line_no)
+        for arg in node["args"]:
+            yield from _var_refs_in_expr(arg, line_no)
+    elif k == "index":
+        yield from _var_refs_in_expr(node["list"], fallback_line_no)
+        yield from _var_refs_in_expr(node["idx"], fallback_line_no)
+    elif k == "list":
+        for item in node["items"]:
+            yield from _var_refs_in_expr(item, fallback_line_no)
+    elif k == "record":
+        for _, val in node["pairs"]:
+            yield from _var_refs_in_expr(val, fallback_line_no)
+
+
+def _check_expr_vars(expr, defined, source_lines, filename, fallback_line_no):
+    for name, line_no in _var_refs_in_expr(expr, fallback_line_no):
+        if name and name not in defined:
+            raise MossError(line_no, source_lines,
+                f'Moss found "{name}", but no variable with that name exists yet.\n\n'
+                f'If you meant text, put it in quotes: "{name}"\n'
+                f'If you meant a variable, assign it before this line: {name} = ...',
+                filename)
+
+
+def _validate_stmt_vars(stmts, defined, source_lines, filename):
+    """Validate variable references and return names defined after these statements."""
+    defined = set(defined)
+    for stmt in stmts:
+        k = stmt["kind"]
+        line_no = stmt.get("line_no", 1)
+        if k == "assign":
+            _check_expr_vars(stmt["value"], defined, source_lines, filename, line_no)
+            defined.add(stmt["name"])
+        elif k in ("output", "return"):
+            _check_expr_vars(stmt["value"], defined, source_lines, filename, line_no)
+        elif k == "if":
+            for branch in stmt["branches"]:
+                _check_expr_vars(branch["cond"], defined, source_lines, filename, line_no)
+
+            branch_defined_sets = [
+                _validate_stmt_vars(branch["body"], set(defined), source_lines, filename)
+                for branch in stmt["branches"]
+            ]
+            if stmt.get("else_body"):
+                branch_defined_sets.append(
+                    _validate_stmt_vars(stmt["else_body"], set(defined), source_lines, filename)
+                )
+
+            # Match codegen: variables first introduced in any branch are
+            # predeclared before the if and remain visible afterwards as null
+            # if that branch did not run.
+            for branch_defined in branch_defined_sets:
+                defined |= branch_defined
+        elif k == "for_in":
+            _check_expr_vars(stmt["iter"], defined, source_lines, filename, line_no)
+            inner_defined = set(defined)
+            inner_defined.add(stmt["var"])
+            _validate_stmt_vars(stmt["body"], inner_defined, source_lines, filename)
+        elif k == "for_range":
+            _check_expr_vars(stmt["start"], defined, source_lines, filename, line_no)
+            _check_expr_vars(stmt["end"], defined, source_lines, filename, line_no)
+            inner_defined = set(defined)
+            inner_defined.add(stmt["var"])
+            _validate_stmt_vars(stmt["body"], inner_defined, source_lines, filename)
+        elif k in ("stop", "skip"):
+            pass
+        else:
+            raise RuntimeError(f"unknown stmt kind while validating variables: {k}")
+    return defined
+
+
+def _validate_variables(top_assigns, main_fn, user_fns, source_lines, filename):
+    """Reject variable references that would otherwise leak to the Rust compiler."""
+    main_defined = {"input"}
+    _validate_stmt_vars(top_assigns + main_fn["body"], main_defined, source_lines, filename)
+
+    for fn in user_fns:
+        fn_defined = set(fn["params"])
+        _validate_stmt_vars(fn["body"], fn_defined, source_lines, filename)
+
+
 def compile_program(ast, filename, source_lines):
     # Collect top-level assigns, user-defined functions, and main.
     top_assigns = []
@@ -1145,6 +1245,7 @@ def compile_program(ast, filename, source_lines):
         + [stmt for fn in user_fns for stmt in fn["body"]]
     )
     _validate_calls(all_stmts, known_fns, source_lines, filename)
+    _validate_variables(top_assigns, main_fn, user_fns, source_lines, filename)
 
     # Generate user-defined functions (emitted before main so they're in scope).
     user_fn_code = "".join(gen_user_fn(fn) + "\n" for fn in user_fns)
