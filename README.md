@@ -4,7 +4,7 @@
 
 A small language that reads like English and compiles to Rust.
 
-Moss is designed so a non-coder can learn it in a day. You write what you mean, and Moss handles the rest — no punctuation puzzles, no jargon, no compiler errors that read like machine code.
+A non-coder can learn the whole thing in an afternoon. You write what you mean. No punctuation puzzles, no jargon. When something breaks, Moss tells you in plain English instead of machine code.
 
 ```moss
 fn main
@@ -70,7 +70,7 @@ Put values into strings with `{name}`:
 message = "count is {count}"
 ```
 
-You can put anything inside `{}` — numbers, booleans, other variables. Moss converts them for you.
+You can put anything inside `{}`: numbers, booleans, other variables. Moss converts them for you.
 
 ### Numbers
 
@@ -192,7 +192,7 @@ if not done
     output type: "waiting"
 ```
 
-Use parentheses when mixing `and` / `or` — Moss will ask you to, if you don't.
+Use parentheses when mixing `and` / `or`. Moss will ask you to if you don't.
 
 ### Loops
 
@@ -260,7 +260,7 @@ Output:
 
 Prints plain text. For trying things out.
 
-Wait — that's a second way to output. Moss only has `output`. Use `output` with a string if you want to see something:
+Hold on, that's a second way to output. Moss only has `output`. Use it with a string if you want to see something:
 
 ```moss
 fn main
@@ -315,7 +315,7 @@ Runs your program right now. Feels instant. Moss translates your code into Rust 
 ```sh
 moss build hello.moss
 ```
-Creates a real program file you can share with anyone. It runs on its own — they don't need Moss installed.
+Creates a real program file you can share with anyone. It runs on its own. They don't need Moss installed.
 
 One-way relationship: Moss is the source, Rust is the output. You write Moss, Moss makes Rust, Rust becomes a program. You never write Rust yourself, and Rust code can't come back into Moss.
 
@@ -555,15 +555,15 @@ fn main
 
 ---
 
-## What Moss is not
+## What Moss is for
 
-- Not a systems language
-- Not for building apps with screens
-- Not object-oriented (no classes)
-- Not for math-heavy work
-- Not a shell replacement
+Moss has two jobs.
 
-Moss is for: writing small programs that take input, make a decision, and produce structured output. Think of it as the language for the middle of a pipeline.
+The first is Plexi apps. Small stateful tools: dashboards, forms, list managers, pipeline viewers, notification senders, agent frontends. The goal is to make Moss the simplest way to build one. The app SDK isn't here yet, but it's where Moss is headed. See the [Plexi SDK roadmap](docs/plexi-sdk-roadmap.md).
+
+The second is pipeline programs. Take input, make a decision, produce structured output. The thing that sits in the middle of a shell pipeline.
+
+Moss isn't built for everything. It's not for games, custom canvas rendering, low-latency audio or video, or raw terminal control. It's not a systems language, it has no classes, and it won't replace your shell.
 
 ---
 
@@ -617,4 +617,4 @@ Run that Rust and you get:
 {"type":"ready","ok":true}
 ```
 
-You never see this Rust unless you ask. But it's there — readable, ordinary, and a stepping-stone if you ever want to learn Rust proper.
+You never see this Rust unless you ask. It's there if you want it: readable, ordinary, and a decent way to start learning Rust later.
