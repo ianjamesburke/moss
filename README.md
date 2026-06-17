@@ -2,9 +2,9 @@
   <img src="assets/moss-header.png" alt="Moss" width="640">
 </p>
 
-A small language that reads like English and compiles to Rust.
+A tiny language that reads like English and compiles to Rust.
 
-A non-coder can learn the whole thing in an afternoon. You write what you mean. No punctuation puzzles, no jargon. When something breaks, Moss tells you in plain English instead of machine code.
+My goal with language is to create something simple enough to learn in a day, yet extensible enough to stay with you your entire life. 
 
 ```moss
 fn main
@@ -32,7 +32,7 @@ Running this prints one line of JSON:
 
 **Fail first.** If something is wrong, Moss tells you immediately and stops. One error at a time, in plain English.
 
-**Never make the writer feel dumb.** Every error is phrased so a 12-year-old can read it once and know what to do.
+**Never make the writer feel dumb.** Every error is phrased so an 8-year-old can read it once and know what to do.
 
 ---
 
