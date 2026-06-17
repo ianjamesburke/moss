@@ -1,4 +1,6 @@
-# Moss
+<p align="center">
+  <img src="assets/moss-header.svg" alt="Moss" width="640">
+</p>
 
 A small language that reads like English and compiles to Rust.
 
