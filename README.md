@@ -1,4 +1,19 @@
-# Moss
+<div align="center">
+
+<pre>
+<font color="#2f8f46">      vvv        vv                 vv        vvv
+  vvvv\|/vvvv   \|/   .-~~~~~~~~-.   \|/   vvvv\|/vvvv
+ vv\|/vvvv\|/vv      /  <b>M O S S</b>   \      vv\|/vvvv\|/vv
+   `~~~~~~\|/~~~~~._/              \_.~~~~~\|/~~~~~~'
+          \|/        .-..-..-..-.        \|/
+     ~ ~ ~ ~ ~ ~ ~  /_/\/_/\/\_\  ~ ~ ~ ~ ~ ~ ~
+   ~ ~ ~ ~ ~ ~ ~ ~ /_/\/_/\/\_\_\ ~ ~ ~ ~ ~ ~ ~ ~
+      ||  ||       '~~~~~~~~~~~~'       ||  ||
+      ||  ||     .  .  .    .  .       ||  ||
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</font>
+</pre>
+
+</div>
 
 A small language that reads like English and compiles to Rust.
 
